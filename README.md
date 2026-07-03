@@ -62,7 +62,7 @@ Node-RED editor also covers everyday usage.
 
 ## Sponsorship
 
-[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-support-yellow?logo=buymeacoffee)](https://buymeacoffee.com/BMC-USERNAME)
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-support-yellow?logo=buymeacoffee)](https://buymeacoffee.com/mchristegh)
 
 ## License
 
