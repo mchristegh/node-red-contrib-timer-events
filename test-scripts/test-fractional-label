@@ -77,7 +77,7 @@ function makeNode(RED, cfg) {
 (async function main() {
   const userDir = fs.mkdtempSync(path.join(os.tmpdir(), "timerevents-frac-"));
   const RED = makeRED(userDir);
-  require("/home/claude/timer-events.js")(RED);
+  require(path.join(__dirname, "timer-events.js"))(RED);
 
   // -- R1: the reported bug - pause then resume, label must be whole seconds -
   {

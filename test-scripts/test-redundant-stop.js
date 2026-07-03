@@ -71,7 +71,7 @@ function makeNode(RED, cfg) {
 (async function main() {
   const userDir = fs.mkdtempSync(path.join(os.tmpdir(), "timerevents-t5-"));
   const RED = makeRED(userDir);
-  require("/home/claude/timer-events.js")(RED);
+  require(path.join(__dirname, "timer-events.js"))(RED);
 
   // -- X1: stop on a never-started node -> ignored, output 4 only ------------
   {

@@ -72,7 +72,7 @@ function makeNode(RED, cfg) {
 (async function main() {
   const userDir = fs.mkdtempSync(path.join(os.tmpdir(), "timerevents-test-"));
   const RED = makeRED(userDir);
-  require("/home/claude/timer-events.js")(RED);
+  require(path.join(__dirname, "timer-events.js"))(RED);
 
   // -- T1: pause/resume accuracy with reporting off ("Never") ---------------
   {

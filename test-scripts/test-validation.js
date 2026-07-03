@@ -71,7 +71,7 @@ function makeNode(RED, cfg) {
 (async function main() {
   const userDir = fs.mkdtempSync(path.join(os.tmpdir(), "timerevents-t4-"));
   const RED = makeRED(userDir);
-  require("/home/claude/timer-events.js")(RED);
+  require(path.join(__dirname, "timer-events.js"))(RED);
 
   // -- W1: msg.delay unconvertible ("5s") -> documented fallback -------------
   {
