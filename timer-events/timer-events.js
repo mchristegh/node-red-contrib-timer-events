@@ -479,13 +479,13 @@ module.exports = function(RED) {
     }
 
     /**
-     * Display-boundary rounding only: the raw ms value from
-     * getRemainingTime() goes on outgoing messages untouched; the status
-     * label gets the nearest whole second so displayTime()'s HH:MM:SS
-     * formatting never renders fractional seconds.
+     * Convenience wrapper: format the current authoritative remaining time
+     * for the status label. Rounding to whole seconds happens inside
+     * displayTime() itself - the single display boundary - so the raw ms
+     * value passes through untouched here.
      */
     function displayRemaining(fmt) {
-      return displayTime(Math.round(getRemainingTime() / 1000) * 1000, fmt);
+      return displayTime(getRemainingTime(), fmt);
     }
 
     function convertToMilliseconds(value, units) {
@@ -1450,7 +1450,13 @@ module.exports = function(RED) {
     // -------------------------------------------------------------------------
 
     function displayTime(delayToDisplay, reportingformat) {
-      delayToDisplay = delayToDisplay / 1000;
+      // THE display boundary: every status label flows through here, and
+      // nothing else does (message envelopes carry raw ms; timing never
+      // reads formatted values). Rounding to whole seconds at this single
+      // choke point guarantees no label ever shows fractional seconds -
+      // e.g. the exact frozen value restored on resume (35221ms) displays
+      // as 35, not 35.221.
+      delayToDisplay = Math.round(delayToDisplay / 1000);
       switch (reportingformat) {
         case REPORTING_FORMAT.SECONDS: return delayToDisplay;
         case REPORTING_FORMAT.MINUTES: return delayToDisplay / 60;

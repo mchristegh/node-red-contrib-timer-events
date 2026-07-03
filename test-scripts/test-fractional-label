@@ -1,0 +1,153 @@
+// Tests for the fractional-seconds status-label fix: rounding enforced at
+// the single display boundary (displayTime). Reproduces the reported
+// pause/resume case, sweeps the other fractional-sync paths, and confirms
+// timing precision is untouched (labels round; clocks don't).
+"use strict";
+const os = require("os");
+const fs = require("fs");
+const path = require("path");
+
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+let failures = 0;
+function check(label, cond, detail) {
+  if (cond) { console.log("PASS  " + label); }
+  else { failures++; console.log("FAIL  " + label + (detail !== undefined ? "  [" + detail + "]" : "")); }
+}
+function near(a, e, tol) { return Math.abs(a - e) <= tol; }
+// A label is fraction-free if no decimal point appears in any numeric run
+function hasFraction(text) { return typeof text === "string" && /\d+\.\d+/.test(text); }
+
+function makeRED(userDir) {
+  const registered = {};
+  return {
+    nodes: {
+      registerType(name, ctor) { registered[name] = ctor; },
+      createNode(node, n) {
+        node.id = n.id;
+        node._handlers = {};
+        node.on = function(evt, fn) { node._handlers[evt] = fn; };
+        node.receive = function(msg) { node._handlers["input"](msg); };
+        node.close = function(removed) {
+          return new Promise(res => node._handlers["close"](removed, res));
+        };
+        node.sent = [];
+        node.send = function(arr) { node.sent.push(arr); };
+        node.statusCalls = [];
+        node.status = function(s) { node.statusCalls.push(s); };
+        node.warn = function() {};
+        node.error = function(e) { console.log("NODE ERROR:", e); };
+      },
+      get(name) { return registered[name]; }
+    },
+    util: {
+      cloneMessage(m) { return JSON.parse(JSON.stringify(m || {})); },
+      evaluateNodeProperty(v) { return v; }
+    },
+    settings: { userDir: userDir }
+  };
+}
+
+function events(node, type) {
+  const out = [];
+  for (const arr of node.sent) for (const m of arr) if (m && m.timerEvent === type) out.push(m);
+  return out;
+}
+function lastEvent(node, type) { const e = events(node, type); return e.length ? e[e.length - 1] : null; }
+function lastStatusText(node) {
+  const s = node.statusCalls[node.statusCalls.length - 1];
+  return s && s.text;
+}
+
+function makeNode(RED, cfg) {
+  const Ctor = RED.nodes.get("timer-events");
+  const node = {};
+  Ctor.call(node, Object.assign({
+    id: "r" + Math.random().toString(36).slice(2),
+    duration: "40", durationType: "num", units: "Second",
+    reporting: "every_second", reportingformat: "human",
+    persist: false, ignoretimerpass: false, donotresettimer: false,
+    thresholdaction: "donothing", thresholdcount: "0",
+    thresholdaddtime: "0", thresholdaddtimeunits: "Second",
+    heartbeatinterval: "0", heartbeatintervalunits: "Second",
+    cooldownduration: "0", cooldownunits: "Second"
+  }, cfg));
+  return node;
+}
+
+(async function main() {
+  const userDir = fs.mkdtempSync(path.join(os.tmpdir(), "timerevents-frac-"));
+  const RED = makeRED(userDir);
+  require("/home/claude/timer-events.js")(RED);
+
+  // -- R1: the reported bug - pause then resume, label must be whole seconds -
+  {
+    const n = makeNode(RED, { reportingformat: "seconds" }); // 35.221-style leak was most visible here
+    n.receive({ payload: "go" });
+    await sleep(4780); // engineered so remaining is a messy fraction (~35.22s)
+    n.receive({ payload: "pause" });
+    check("R1a paused label has no fractional seconds", !hasFraction(lastStatusText(n)), lastStatusText(n));
+    n.receive({ payload: "resume" });
+    check("R1b resume label has no fractional seconds (the reported case)",
+      !hasFraction(lastStatusText(n)), lastStatusText(n));
+    await sleep(2300); // let the countdown interval repaint a few times
+    const fractional = n.statusCalls.filter(s => hasFraction(s && s.text));
+    check("R1c no subsequent countdown tick shows fractions",
+      fractional.length === 0, JSON.stringify(fractional.map(s => s.text)));
+    // Timing untouched: envelope still carries the exact frozen-derived ms
+    n.receive({ payload: "query" });
+    const q = lastEvent(n, "query");
+    check("R1d msg.remainingTime still exact ms (not rounded)",
+      q && q.remainingTime % 1000 !== 0, q && q.remainingTime);
+    n.receive({ payload: "stop" });
+    await n.close(false);
+  }
+
+  // -- R2: sweep the other fractional-sync paths ------------------------------
+  {
+    const n = makeNode(RED, { reportingformat: "human", donotresettimer: true,
+      thresholdaction: "addtime", thresholdcount: "2", thresholdaddtime: "5" });
+    n.receive({ payload: "go" });
+    await sleep(1370);
+    n.receive({ payload: "adjusttime", adjusttime: 2500 });          // fractional base + fractional add
+    check("R2a adjusttime label whole seconds", !hasFraction(lastStatusText(n)), lastStatusText(n));
+    n.receive({ payload: "settime", settime: 1500 });                 // the flagged settime edge: now rounds
+    check("R2b settime 1500 label rounds (edge resolved per display principle)",
+      !hasFraction(lastStatusText(n)), lastStatusText(n));
+    n.receive({ payload: "poke1" });
+    n.receive({ payload: "poke2" });                                  // threshold Add Time fires on fractional base
+    check("R2c threshold Add Time label whole seconds", !hasFraction(lastStatusText(n)), lastStatusText(n));
+    n.receive({ payload: "stop" });
+    await n.close(false);
+  }
+
+  // -- R3: threshold Pause label whole seconds --------------------------------
+  {
+    const n = makeNode(RED, { donotresettimer: true, thresholdaction: "pause", thresholdcount: "2" });
+    n.receive({ payload: "go" });
+    await sleep(1430);
+    n.receive({ payload: "p1" });
+    n.receive({ payload: "p2" }); // threshold pause fires at fractional remaining
+    check("R3 threshold Pause label whole seconds", !hasFraction(lastStatusText(n)), lastStatusText(n));
+    n.receive({ payload: "stop" });
+    await n.close(false);
+  }
+
+  // -- R4: timing precision unchanged - resume runs the exact frozen time -----
+  {
+    const n = makeNode(RED, { duration: "8", reporting: "none" });
+    n.receive({ payload: "go" });
+    await sleep(2340); // frozen remaining will be ~5660ms, deliberately fractional
+    n.receive({ payload: "pause" });
+    const frozen = (n.receive({ payload: "query" }), lastEvent(n, "query")).remainingTime;
+    n.receive({ payload: "resume" });
+    const t0 = Date.now();
+    await new Promise(res => { const iv = setInterval(() => { if (lastEvent(n, "expired")) { clearInterval(iv); res(); } }, 25); });
+    const ranFor = Date.now() - t0;
+    check("R4 resume-to-expiry matches the exact frozen ms (labels round; clocks don't)",
+      near(ranFor, frozen, 150), ranFor + " vs frozen " + Math.round(frozen));
+    await n.close(false);
+  }
+
+  console.log(failures === 0 ? "\nALL FRACTIONAL-LABEL TESTS PASSED" : "\n" + failures + " FAILURE(S)");
+  process.exit(failures === 0 ? 0 : 1);
+})();
