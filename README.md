@@ -60,6 +60,10 @@ details, persistence behavior, example flows, and troubleshooting — lives
 in the [project wiki](../../wiki). The node's built-in help panel in the
 Node-RED editor also covers everyday usage.
 
+## Sponsorship
+
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-support-yellow?logo=buymeacoffee)](https://buymeacoffee.com/BMC-USERNAME)
+
 ## License
 
 Licensed under the [Apache License 2.0](LICENSE).
