@@ -1,6 +1,6 @@
 {
   "name": "node-red-contrib-timer-events",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "An enhanced Node-RED timer node with variable delay, pause/resume, persistent state, cooldown and configurable reporting.",
   "dependencies": {},
   "repository": {
