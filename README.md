@@ -47,7 +47,7 @@ didn't truly happen appears only on output 4, tagged `msg.ignored: true`.
 From your Node-RED user directory (typically `~/.node-red`):
 
 ```bash
-npm install <your-package-name>
+npm install node-red-contrib-timer-events
 ```
 
 Or via the Node-RED palette manager. The node appears in the **function**
@@ -59,10 +59,6 @@ Full documentation — configuration reference, event taxonomy, command
 details, persistence behavior, example flows, and troubleshooting — lives
 in the [project wiki](../../wiki). The node's built-in help panel in the
 Node-RED editor also covers everyday usage.
-
-## Sponsorship
-
-[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-support-yellow?logo=buymeacoffee)](https://buymeacoffee.com/mchristegh)
 
 ## License
 
