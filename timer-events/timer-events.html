@@ -19,438 +19,446 @@
 -->
 
 <script type="text/javascript">
-    RED.nodes.registerType('timer-events',{
-        category: 'function',
-        color:"#869869",
-        defaults: {
-            duration: {value:"5",required:true,validate:RED.validators.typedInput("durationType")},
-            durationType: {value:'num'},
-            units: {value:"Second"},
-            name: {value:""},
-            reporting: {value:"none"},
-            reportingformat: {value:"human"},
-            persist: {value:false},
-            ignoretimerpass: {value:false},
-            donotresettimer: {value:false},
-            thresholdaction: {value:"donothing"},
-            thresholdcount: {value:"0"},
-            thresholdaddtime: {value:"0"},
-            thresholdaddtimeunits: {value:"Second"},
-            heartbeatinterval: {value:"0"},
-            heartbeatintervalunits: {value:"Second"},
-            cooldownduration: {value:"0"},
-            cooldownunits: {value:"Second"}
-        },
-        inputs:1,
-        outputs:4,
-        icon: "stoptimer.png",
-        label: function() {
-            // A custom name replaces the generated label entirely
-            // (standard Node-RED convention). Otherwise: duration line,
-            // plus a cooldown line when a valid cooldown is configured -
-            // Node-RED 1.0+ renders \n in labels as separate lines.
-            if (this.name) {
-                return this.name;
-            }
-            let label = this.duration + " " + this.units + " Timer";
-            let cd = Number(this.cooldownduration);
-            if (!isNaN(cd) && cd > 0) {
-                label += "\n" + this.cooldownduration + " " + this.cooldownunits + " Cooldown";
-            }
-            return label;
-        },
-        labelStyle: function() {
-            return this.name?"node_label_italic":"";
-        },
-        paletteLabel: "Timer with Events",
-        outputLabels: ["Start","Stop","Query","Events"],
-        oneditprepare: function() {
-            if (this.durationType == null) {
-                this.durationType = "num";
-            }
+  RED.nodes.registerType("timer-events", {
+    category: "function",
+    color: "#869869",
+    defaults: {
+      duration: {
+        value: "5",
+        required: true,
+        validate: RED.validators.typedInput("durationType"),
+      },
+      durationType: { value: "num" },
+      units: { value: "Second" },
+      name: { value: "" },
+      reporting: { value: "none" },
+      reportingformat: { value: "human" },
+      persist: { value: false },
+      ignoretimerpass: { value: false },
+      donotresettimer: { value: false },
+      thresholdaction: { value: "donothing" },
+      thresholdcount: { value: "0" },
+      thresholdaddtime: { value: "0" },
+      thresholdaddtimeunits: { value: "Second" },
+      heartbeatinterval: { value: "0" },
+      heartbeatintervalunits: { value: "Second" },
+      cooldownduration: { value: "0" },
+      cooldownunits: { value: "Second" },
+    },
+    inputs: 1,
+    outputs: 4,
+    icon: "stoptimer.png",
+    label: function () {
+      // A custom name replaces the generated label entirely
+      // (standard Node-RED convention). Otherwise: duration line,
+      // plus a cooldown line when a valid cooldown is configured -
+      // Node-RED 1.0+ renders \n in labels as separate lines.
+      if (this.name) {
+        return this.name;
+      }
+      let label = this.duration + " " + this.units + " Timer";
+      let cd = Number(this.cooldownduration);
+      if (!isNaN(cd) && cd > 0) {
+        label +=
+          "\n" + this.cooldownduration + " " + this.cooldownunits + " Cooldown";
+      }
+      return label;
+    },
+    labelStyle: function () {
+      return this.name ? "node_label_italic" : "";
+    },
+    paletteLabel: "Timer with Events",
+    outputLabels: ["Start", "Stop", "Query", "Events"],
+    oneditprepare: function () {
+      if (this.durationType == null) {
+        this.durationType = "num";
+      }
 
-            $("#node-input-durationType").val(this.durationType);
+      $("#node-input-durationType").val(this.durationType);
 
-            $("#node-input-duration").typedInput({
-                default: 'num',
-                typeField: $("#node-input-durationType"),
-                types:['num','env']
-            });
+      $("#node-input-duration").typedInput({
+        default: "num",
+        typeField: $("#node-input-durationType"),
+        types: ["num", "env"],
+      });
 
-            $("#node-input-duration").typedInput('type', this.durationType);
+      $("#node-input-duration").typedInput("type", this.durationType);
 
-            $("#node-input-reporting").val(this.reporting);
-            $("#node-input-reportingformat").val(this.reportingformat);
-            $("#node-input-thresholdaction").val(this.thresholdaction);
-            $("#node-input-thresholdaddtimeunits").val(this.thresholdaddtimeunits);
-            $("#node-input-heartbeatintervalunits").val(this.heartbeatintervalunits);
-            $("#node-input-cooldownunits").val(this.cooldownunits);
+      $("#node-input-reporting").val(this.reporting);
+      $("#node-input-reportingformat").val(this.reportingformat);
+      $("#node-input-thresholdaction").val(this.thresholdaction);
+      $("#node-input-thresholdaddtimeunits").val(this.thresholdaddtimeunits);
+      $("#node-input-heartbeatintervalunits").val(this.heartbeatintervalunits);
+      $("#node-input-cooldownunits").val(this.cooldownunits);
 
-            function updateThresholdVisibility() {
-                // Threshold Count is the master switch, matching the
-                // runtime (thresholdcount <= 0 disables threshold logic
-                // regardless of the configured action). At 0 the action
-                // rows are hidden but the stored action is left untouched,
-                // so toggling the count off and back does not lose it.
-                let count   = parseInt($("#node-input-thresholdcount").val(), 10);
-                let enabled = !isNaN(count) && count > 0;
-                if (!enabled) {
-                    $("#threshold-action-row").hide();
-                    $("#threshold-addtime-row").hide();
-                    $("#threshold-addtimeunits-row").hide();
-                    return;
-                }
-                $("#threshold-action-row").show();
-                let action = $("#node-input-thresholdaction").val();
-                if (action === "addtime") {
-                    $("#threshold-addtime-row").show();
-                    $("#threshold-addtimeunits-row").show();
-                } else {
-                    $("#threshold-addtime-row").hide();
-                    $("#threshold-addtimeunits-row").hide();
-                }
-            }
-
-            $("#node-input-thresholdaction").on("change", updateThresholdVisibility);
-            $("#node-input-thresholdcount").on("change input", updateThresholdVisibility);
-            updateThresholdVisibility();
+      function updateThresholdVisibility() {
+        // Threshold Count is the master switch, matching the
+        // runtime (thresholdcount <= 0 disables threshold logic
+        // regardless of the configured action). At 0 the action
+        // rows are hidden but the stored action is left untouched,
+        // so toggling the count off and back does not lose it.
+        let count = parseInt($("#node-input-thresholdcount").val(), 10);
+        let enabled = !isNaN(count) && count > 0;
+        if (!enabled) {
+          $("#threshold-action-row").hide();
+          $("#threshold-addtime-row").hide();
+          $("#threshold-addtimeunits-row").hide();
+          return;
         }
-    });
+        $("#threshold-action-row").show();
+        let action = $("#node-input-thresholdaction").val();
+        if (action === "addtime") {
+          $("#threshold-addtime-row").show();
+          $("#threshold-addtimeunits-row").show();
+        } else {
+          $("#threshold-addtime-row").hide();
+          $("#threshold-addtimeunits-row").hide();
+        }
+      }
+
+      $("#node-input-thresholdaction").on("change", updateThresholdVisibility);
+      $("#node-input-thresholdcount").on(
+        "change input",
+        updateThresholdVisibility,
+      );
+      updateThresholdVisibility();
+    },
+  });
 </script>
 
 <script type="text/x-red" data-template-name="timer-events">
-    <div class="form-row">
-        <i class="fa fa-clock-o"></i>
-        <label for="node-input-duration"> Timer</label>
-        <input type="hidden" id="node-input-durationType">
-        <input type="text" id="node-input-duration" style="text-align:end; width:270px !important">
-    </div>
-    <div class="form-row">
-        <i class="fa fa-bars"></i>
-        <label for="node-input-units"> Units</label>
-        <select id="node-input-units">
-            <option value="Millisecond">Milliseconds</option>
-            <option value="Second">Seconds</option>
-            <option value="Minute">Minutes</option>
-            <option value="Hour">Hours</option>
-        </select>
-    </div>
-    <div class="form-row">
-        <i class="fa fa-heartbeat"></i>
-        <label for="node-input-reporting"> Status Reporting</label>
-        <select id="node-input-reporting">
-            <option value="none">Never</option>
-            <option value="every_second">Every Second</option>
-            <option value="last_minute_seconds">Every Minute, Last minute by seconds</option>
-        </select>
-    </div>
-    <div class="form-row">
-        <label for="node-input-reportingformat"> Reporting format</label>
-        <select id="node-input-reportingformat">
-            <option value="human">HH:MM:SS</option>
-            <option value="seconds">Seconds</option>
-            <option value="minutes">Minutes</option>
-            <option value="hours">Hours</option>
-        </select>
-    </div>
-    <div class="form-row">
-        <i class="fa fa-floppy-o"></i>
-        <label style="width:auto" for="node-input-persist"> Resume timer on deploy/restart</label>
-        <input type="checkbox" id="node-input-persist" style="display:inline-block; width:auto; vertical-align:top;">
-    </div>
-    <div class="form-row">
-        <i class="fa fa-recycle"></i>
-        <label style="width:auto" for="node-input-ignoretimerpass"> Ignore incoming _timerpass</label>
-        <input type="checkbox" id="node-input-ignoretimerpass" style="display:inline-block; width:auto; vertical-align:top;">
-    </div>
-    <div class="form-row">
-        <i class="fa fa-lock"></i>
-        <label style="width:auto" for="node-input-donotresettimer"> Do Not Reset Timer on Subsequent Incoming Message</label>
-        <input type="checkbox" id="node-input-donotresettimer" style="display:inline-block; width:auto; vertical-align:top;">
-    </div>
-    <hr>
-    <div class="form-row">
-        <i class="fa fa-hashtag"></i>
-        <label for="node-input-thresholdcount"> Threshold Count</label>
-        <input type="number" id="node-input-thresholdcount" min="0" style="width:100px">
-    </div>
-    <div class="form-row" id="threshold-action-row">
-        <i class="fa fa-exclamation-triangle"></i>
-        <label for="node-input-thresholdaction"> Ignored Message Threshold Action</label>
-        <select id="node-input-thresholdaction">
-            <option value="donothing">Do Nothing</option>
-            <option value="stop">Stop</option>
-            <option value="pause">Pause</option>
-            <option value="reset">Restart Timer</option>
-            <option value="addtime">Add Time</option>
-            <option value="warning">Emit Warning</option>
-        </select>
-    </div>
-    <div class="form-row" id="threshold-addtime-row">
-        <i class="fa fa-plus-circle"></i>
-        <label for="node-input-thresholdaddtime"> Add Time Amount</label>
-        <input type="number" id="node-input-thresholdaddtime" min="1" style="width:100px">
-    </div>
-    <div class="form-row" id="threshold-addtimeunits-row">
-        <label for="node-input-thresholdaddtimeunits"> Add Time Units</label>
-        <select id="node-input-thresholdaddtimeunits">
-            <option value="Millisecond">Milliseconds</option>
-            <option value="Second">Seconds</option>
-            <option value="Minute">Minutes</option>
-            <option value="Hour">Hours</option>
-        </select>
-    </div>
-    <hr>
-    <div class="form-row">
-        <i class="fa fa-heart-o"></i>
-        <label for="node-input-heartbeatinterval"> Heartbeat Interval</label>
-        <input type="number" id="node-input-heartbeatinterval" min="0" style="width:100px">
-    </div>
-    <div class="form-row">
-        <label for="node-input-heartbeatintervalunits"> Heartbeat Units</label>
-        <select id="node-input-heartbeatintervalunits">
-            <option value="Millisecond">Milliseconds</option>
-            <option value="Second">Seconds</option>
-            <option value="Minute">Minutes</option>
-            <option value="Hour">Hours</option>
-        </select>
-    </div>
-    <hr>
-    <div class="form-row">
-        <i class="fa fa-snowflake-o"></i>
-        <label for="node-input-cooldownduration"> Cooldown Duration</label>
-        <input type="number" id="node-input-cooldownduration" min="0" style="width:100px">
-    </div>
-    <div class="form-row">
-        <label for="node-input-cooldownunits"> Cooldown Units</label>
-        <select id="node-input-cooldownunits">
-            <option value="Millisecond">Milliseconds</option>
-            <option value="Second">Seconds</option>
-            <option value="Minute">Minutes</option>
-            <option value="Hour">Hours</option>
-        </select>
-    </div>
-    <hr>
-    <div class="form-row">
-        <i class="fa fa-tag"></i>
-        <label for="node-input-name"> Name</label>
-        <input type="text" id="node-input-name" placeholder="Name"></input>
-    </div>
+  <div class="form-row">
+      <i class="fa fa-clock-o"></i>
+      <label for="node-input-duration"> Timer</label>
+      <input type="hidden" id="node-input-durationType">
+      <input type="text" id="node-input-duration" style="text-align:end; width:270px !important">
+  </div>
+  <div class="form-row">
+      <i class="fa fa-bars"></i>
+      <label for="node-input-units"> Units</label>
+      <select id="node-input-units">
+          <option value="Millisecond">Milliseconds</option>
+          <option value="Second">Seconds</option>
+          <option value="Minute">Minutes</option>
+          <option value="Hour">Hours</option>
+      </select>
+  </div>
+  <div class="form-row">
+      <i class="fa fa-heartbeat"></i>
+      <label for="node-input-reporting"> Status Reporting</label>
+      <select id="node-input-reporting">
+          <option value="none">Never</option>
+          <option value="every_second">Every Second</option>
+          <option value="last_minute_seconds">Every Minute, Last minute by seconds</option>
+      </select>
+  </div>
+  <div class="form-row">
+      <label for="node-input-reportingformat"> Reporting format</label>
+      <select id="node-input-reportingformat">
+          <option value="human">HH:MM:SS</option>
+          <option value="seconds">Seconds</option>
+          <option value="minutes">Minutes</option>
+          <option value="hours">Hours</option>
+      </select>
+  </div>
+  <div class="form-row">
+      <i class="fa fa-floppy-o"></i>
+      <label style="width:auto" for="node-input-persist"> Resume timer on deploy/restart</label>
+      <input type="checkbox" id="node-input-persist" style="display:inline-block; width:auto; vertical-align:top;">
+  </div>
+  <div class="form-row">
+      <i class="fa fa-recycle"></i>
+      <label style="width:auto" for="node-input-ignoretimerpass"> Ignore incoming _timerpass</label>
+      <input type="checkbox" id="node-input-ignoretimerpass" style="display:inline-block; width:auto; vertical-align:top;">
+  </div>
+  <div class="form-row">
+      <i class="fa fa-lock"></i>
+      <label style="width:auto" for="node-input-donotresettimer"> Do Not Reset Timer on Subsequent Incoming Message</label>
+      <input type="checkbox" id="node-input-donotresettimer" style="display:inline-block; width:auto; vertical-align:top;">
+  </div>
+  <hr>
+  <div class="form-row">
+      <i class="fa fa-hashtag"></i>
+      <label for="node-input-thresholdcount"> Threshold Count</label>
+      <input type="number" id="node-input-thresholdcount" min="0" style="width:100px">
+  </div>
+  <div class="form-row" id="threshold-action-row">
+      <i class="fa fa-exclamation-triangle"></i>
+      <label for="node-input-thresholdaction"> Ignored Message Threshold Action</label>
+      <select id="node-input-thresholdaction">
+          <option value="donothing">Do Nothing</option>
+          <option value="stop">Stop</option>
+          <option value="pause">Pause</option>
+          <option value="reset">Restart Timer</option>
+          <option value="addtime">Add Time</option>
+          <option value="warning">Emit Warning</option>
+      </select>
+  </div>
+  <div class="form-row" id="threshold-addtime-row">
+      <i class="fa fa-plus-circle"></i>
+      <label for="node-input-thresholdaddtime"> Add Time Amount</label>
+      <input type="number" id="node-input-thresholdaddtime" min="1" style="width:100px">
+  </div>
+  <div class="form-row" id="threshold-addtimeunits-row">
+      <label for="node-input-thresholdaddtimeunits"> Add Time Units</label>
+      <select id="node-input-thresholdaddtimeunits">
+          <option value="Millisecond">Milliseconds</option>
+          <option value="Second">Seconds</option>
+          <option value="Minute">Minutes</option>
+          <option value="Hour">Hours</option>
+      </select>
+  </div>
+  <hr>
+  <div class="form-row">
+      <i class="fa fa-heart-o"></i>
+      <label for="node-input-heartbeatinterval"> Heartbeat Interval</label>
+      <input type="number" id="node-input-heartbeatinterval" min="0" style="width:100px">
+  </div>
+  <div class="form-row">
+      <label for="node-input-heartbeatintervalunits"> Heartbeat Units</label>
+      <select id="node-input-heartbeatintervalunits">
+          <option value="Millisecond">Milliseconds</option>
+          <option value="Second">Seconds</option>
+          <option value="Minute">Minutes</option>
+          <option value="Hour">Hours</option>
+      </select>
+  </div>
+  <hr>
+  <div class="form-row">
+      <i class="fa fa-snowflake-o"></i>
+      <label for="node-input-cooldownduration"> Cooldown Duration</label>
+      <input type="number" id="node-input-cooldownduration" min="0" style="width:100px">
+  </div>
+  <div class="form-row">
+      <label for="node-input-cooldownunits"> Cooldown Units</label>
+      <select id="node-input-cooldownunits">
+          <option value="Millisecond">Milliseconds</option>
+          <option value="Second">Seconds</option>
+          <option value="Minute">Minutes</option>
+          <option value="Hour">Hours</option>
+      </select>
+  </div>
+  <hr>
+  <div class="form-row">
+      <i class="fa fa-tag"></i>
+      <label for="node-input-name"> Name</label>
+      <input type="text" id="node-input-name" placeholder="Name"></input>
+  </div>
 </script>
 
 <script type="text/x-red" data-help-name="timer-events">
-    <p><B>General usage</B><br>
-       A countdown timer with four purpose-built outputs. Any incoming <code>msg</code> starts (or, if already running, restarts) the timer unless it carries a recognized control command in <code>msg.payload</code>. All control commands are <b>case insensitive</b>.
-    </p>
-    <p><B>Outputs</B><br>
-      <ul>
-        <li><b>1 - Start</b> — fires only when the timer transitions from stopped/expired into running. Never fires for a restart of an already-running timer, and never fires for a blocked/ignored start attempt (including one blocked by an active Cooldown).</li>
-        <li><b>2 - Stop</b> — fires only on a genuine stop (via the <code>stop</code> command) or a natural expiry. Never fires for a blocked/ignored stop attempt, and never fires again when a Cooldown period ends (see Cooldown below).</li>
-        <li><b>3 - Query</b> — fires in response to an incoming <code>query</code> message, or automatically on each Heartbeat tick (see below). Always carries a full status snapshot.</li>
-        <li><b>4 - Events</b> — fires for every other event, including duplicate copies of Start and Stop events. This is the only output where <code>msg.ignored</code> can be <code>true</code>, marking a command that was received but did not actually change the timer's state.</li>
-      </ul>
-      Output 1 and output 2 never carry an ignored message — anything that didn't truly happen only ever appears on output 4.
-    </p>
-    <p><B>Message properties on all outputs</B><br>
-      Every output message is a clone of the message that triggered it (or, for events with no live trigger of their own — natural expiry, a Heartbeat tick, a threshold action — a clone of the most recent Start/Restart message) with the following properties added:
-      <ul>
-        <li><code>msg.timerEvent</code> — the event type, see the list below</li>
-        <li><code>msg.timerState</code> — the current state of the timer: <code>running</code>, <code>paused</code>, <code>stopped</code>, <code>expired</code>, or <code>cooldown</code></li>
-        <li><code>msg.remainingTime</code> — the remaining time in milliseconds: live wall-clock remaining while <code>running</code>, frozen while <code>paused</code>, the time left in the Cooldown period while in <code>cooldown</code>, and <code>0</code> while idle (<code>stopped</code>/<code>expired</code>)</li>
-        <li><code>msg.timerDuration</code> — the current run's total duration in milliseconds</li>
-        <li><code>msg.elapsedTime</code> — elapsed time in milliseconds, defined per state: while <code>running</code>, wall-clock time since the current run started; while <code>paused</code>, frozen at the value it had at the moment of pause; while in <code>cooldown</code>, the time elapsed <i>into the Cooldown period</i> (so <code>elapsedTime + remainingTime</code> approximates the Cooldown duration); while idle (<code>stopped</code>/<code>expired</code>), <code>0</code> — there is no current run. The genuine <code>stopped</code> and <code>expired</code> events are the exception: they carry the run's <i>final</i> elapsed value, snapshotted the instant before the run ended, so a consumer can see how far the run got.</li>
-        <li><code>msg.ignoredCount</code> — the number of messages ignored during the current timer run</li>
-        <li><code>msg.lastIgnoredTime</code> — ISO 8601 timestamp of the last ignored message, or <code>null</code> if none</li>
-        <li><code>msg.doNotResetTimer</code> — current runtime lock state as a boolean</li>
-        <li><code>msg.disabled</code> — current disabled state as a boolean</li>
-        <li><code>msg.ignored</code> — <code>true</code> if this message was received but did not change the timer's state (always <code>false</code> on outputs 1, 2, and 3)</li>
-        <li><code>msg.source</code> — <code>"external"</code> if a live incoming message triggered this event, or <code>"internal"</code> if the node itself triggered it (a Heartbeat tick, a threshold action, or a persisted restore on deploy/restart)</li>
-      </ul>
-    </p>
-    <p><B>Event types (<code>msg.timerEvent</code>)</B><br>
-      <ul>
-        <li><code>started</code> — the timer transitioned from stopped/expired into running (output 1 + 4), or a blocked start attempt while disabled (output 4 only, <code>ignored:true</code>)</li>
-        <li><code>restarted</code> — an already-running or paused timer's remaining time was reset back to a fresh run (output 4 only). This covers a new message arriving while already running, as well as a blocked restart attempt while paused or locked (<code>ignored:true</code> in the blocked case)</li>
-        <li><code>stopped</code> — the timer was stopped via the <code>stop</code> command (output 2 + 4), or a redundant <code>stop</code> received while the timer was already idle — <code>stopped</code> or <code>expired</code> (output 4 only, <code>ignored:true</code>, zero state change)</li>
-        <li><code>expired</code> — the timer ran to completion naturally (output 2 + 4)</li>
-        <li><code>paused</code> — the timer was paused, or a blocked pause attempt (output 4 only)</li>
-        <li><code>resumed</code> — the timer was resumed, or a blocked resume attempt (output 4 only)</li>
-        <li><code>locked</code> — Do Not Reset Timer enabled at runtime, or a redundant lock attempt (output 4 only)</li>
-        <li><code>unlocked</code> — Do Not Reset Timer disabled at runtime, or a redundant unlock attempt (output 4 only)</li>
-        <li><code>disabled</code> — new timer starts blocked, or a redundant disable attempt (output 4 only)</li>
-        <li><code>enabled</code> — new timer starts allowed again, or a redundant enable attempt (output 4 only)</li>
-        <li><code>timeadjusted</code> — remaining time was adjusted, or a blocked/invalid adjust attempt. <code>msg.timeAdjusted</code> contains the amount (attempted or applied) in milliseconds (output 4 only)</li>
-        <li><code>timeset</code> — remaining time was set to an exact value, or a blocked/invalid attempt. <code>msg.timeSet</code> contains the value (attempted or applied) in milliseconds (output 4 only)</li>
-        <li><code>durationset</code> — the duration for future runs was set, or an invalid attempt. <code>msg.durationSet</code> contains the value (attempted or applied) in milliseconds (output 4 only)</li>
-        <li><code>warning</code> — a threshold Warning fired. This is never <code>ignored:true</code> — it is a deliberate, side-effect-free notification, not a blocked action (output 4 only)</li>
-        <li><code>query</code> — a status snapshot, either requested via a <code>query</code> message or produced by a Heartbeat tick (output 3 only)</li>
-        <li><code>cooldownstarted</code> — a Cooldown period began following a natural expiry (output 4 only, see Cooldown below)</li>
-        <li><code>cooldownended</code> — a Cooldown period completed naturally (output 4 only). This does <b>not</b> repeat <code>expired</code> on output 2 — expiry was already reported once when the countdown originally hit zero</li>
-      </ul>
-    </p>
-    <p><B>Control Commands</B><br>
-      All control commands are case insensitive. The following commands are supported:
-      <ul>
-        <li><code>stop</code> — cancels the timer immediately. <code>stop</code> is genuine whenever there is something alive to kill — a running timer, a paused timer, or an active Cooldown. Sent while the timer is truly idle (<code>stopped</code> or <code>expired</code>) it is a redundant command: routed to output 4 with <code>msg.ignored = true</code> and no state change whatsoever — no counter reset, no <code>expired</code> → <code>stopped</code> state change, and no arming of the <code>_timerpass</code> filter.</li>
-        <li><code>pause</code> — freezes the countdown at the current remaining time</li>
-        <li><code>resume</code> — restarts the countdown from the frozen point</li>
-        <li><code>query</code> — returns a full state snapshot on output 3 without affecting the timer</li>
-        <li><code>lock</code> — enables Do Not Reset Timer at runtime</li>
-        <li><code>unlock</code> — disables Do Not Reset Timer at runtime</li>
-        <li><code>disable</code> — prevents new timer starts. Everything else works normally. The current timer run continues if running.</li>
-        <li><code>enable</code> — re-enables new timer starts</li>
-        <li><code>adjusttime</code> — adds or subtracts time from the current remaining time (running or paused only). Requires <code>msg.adjusttime</code> in milliseconds. Optionally set <code>msg.adjusttimeunits</code> to override units.</li>
-        <li><code>settime</code> — sets the current remaining time to an exact value (running or paused only). Requires <code>msg.settime</code> in milliseconds. Optionally set <code>msg.settimeunits</code>. Must be positive.</li>
-        <li><code>setduration</code> — sets the timer duration for all future runs. Requires <code>msg.setduration</code> in milliseconds. Optionally set <code>msg.setdurationunits</code>. Must be positive. Works in all states.</li>
-      </ul>
-      For all three time commands, a missing or non-numeric value (e.g. <code>"abc"</code>, an empty string, or the property absent entirely) is rejected with no state change: the command is routed to output 4 with <code>msg.ignored = true</code>. The attempted value rides along on <code>msg.timeAdjusted</code> / <code>msg.timeSet</code> / <code>msg.durationSet</code> so a downstream consumer can see what was rejected — as the raw unconvertible value, or <code>null</code> if the property was absent. Numeric-but-invalid values (e.g. <code>settime</code> ≤ 0) are likewise rejected as <code>ignored:true</code>, carrying the converted milliseconds.
-    </p>
-    <p><B>Heartbeat</B><br>
-      Optionally configure a <i>Heartbeat Interval</i> to have the node automatically produce a status snapshot on output 3 (Query) at a fixed, regular cadence while a timer run is active — useful for external monitoring or watchdog systems that need to confirm the node is functioning correctly over long running timers.
-      <ul>
-        <li>Set to <code>0</code> (default) to disable</li>
-        <li>The heartbeat starts the moment the timer starts and fires on a fixed schedule</li>
-        <li>Each tick produces a normal Query-output message with <code>msg.source = "internal"</code>, so it's indistinguishable in shape from a manually requested query — inspect <code>msg.timerState</code> to see whether it landed while running or paused</li>
-        <li>The heartbeat fires whether the timer is running <b>or</b> paused</li>
-        <li>The heartbeat schedule is <b>not</b> affected by pause, resume, adjusttime, settime, or threshold actions — it ticks independently on its own fixed interval once started. A <i>restart</i> of the timer (a new message while already running) does restart the heartbeat schedule from that moment, since a restart begins a new run.</li>
-        <li>The heartbeat stops when the timer is stopped or expires</li>
-        <li><code>disable</code> does not affect an in-progress run's heartbeat — it continues until the run stops or expires naturally</li>
-        <li>After a persisted restart, the heartbeat restarts fresh from that point rather than resuming the original schedule</li>
-      </ul>
-    </p>
-    <p><B>Cooldown</B><br>
-      Optionally configure a <i>Cooldown Duration</i> to automatically prevent the timer from being started again for a fixed period of time after it naturally expires — for example, running for 6 hours and then refusing to start again for at least 4 hours afterward.
-      <ul>
-        <li>Set to <code>0</code> (default) to disable</li>
-        <li>Cooldown begins <b>only</b> after a natural expiry — sending <code>stop</code> ends the timer immediately with no cooldown</li>
-        <li>The sequence is: <code>running</code> → <code>expired</code> (output 2 + 4, fires once) → <code>cooldown</code> (output 4: <code>cooldownstarted</code>) → cooldown ends, settling back to an idle <code>expired</code> state (output 4: <code>cooldownended</code> — <code>expired</code> is <b>not</b> re-fired on output 2)</li>
-        <li>While in Cooldown, new start attempts are blocked and routed to output 4 with <code>msg.timerEvent = "started"</code> and <code>msg.ignored = true</code> — the same treatment as a blocked start while <i>Disabled</i></li>
-        <li><i>Disabled</i> and Cooldown are independent blocking conditions — either one blocks a new start regardless of the other, and enabling/disabling the node has no effect on an active Cooldown</li>
-        <li>Sending <code>stop</code> during Cooldown cancels it immediately and fires a normal <code>stopped</code> event (output 2 + 4) — this is the only way to cut a Cooldown short</li>
-        <li>Threshold actions do not fire during Cooldown — threshold logic is scoped to a genuinely running timer, which Cooldown is not</li>
-        <li>Heartbeat continues ticking normally during Cooldown</li>
-        <li>A <code>query</code> during Cooldown reports <code>msg.timerState = "cooldown"</code> with <code>msg.remainingTime</code> reflecting the time left in the Cooldown period</li>
-        <li>The node status shows a short <code>Cooldown: HH:MM:SS</code> (yellow dot) using the <i>Reporting</i> cadence and format configured above — no ignored-count detail is shown during Cooldown. If the node is also Disabled, the status simply shows <code>Disabled</code></li>
-        <li>Cooldown is persisted and resumed across deploy/restart if <i>Resume timer on deploy/restart</i> is enabled, using the same restore logic as a running or paused timer</li>
-      </ul>
-    </p>
-    <p><B>Status Reporting</B><br>
-      The <i>Status Reporting</i> option controls only the colored status text shown below the node in the editor — it no longer produces any output message (that role is served by the Query output, manually or via Heartbeat). Options:
-      <ul>
-        <li>Never (default)</li>
-        <li>Every Second</li>
-        <li>Every Minute, Last minute by seconds</li>
-      </ul>
-      The last option works as follows:
-      <ul>
-        <li>While there is more than 1 minute remaining, the status will decrement every minute. At the 1 minute point, it switches to updating every second.</li>
-        <li>The exception to this rule is if your duration is not a minute increment. In that case, the first update will be for the partial minute, after which it operates as noted above. (for example: 2.5 minutes will decrement to 2 minutes, then 1 minute, then every second down to zero)</li>
-      </ul>
-      The format is defined by the <i>Reporting Format</i> option: hh:mm:ss (default), or the total number of seconds, minutes, or hours.
-    </p>
-    <p><B>Querying the timer</B><br>
-      Send a message with <code>msg.payload</code> of <code>query</code> (any case) to get a full snapshot of the current timer state on output 3. The timer is not affected in any way by a query message. <code>msg.source</code> will be <code>"external"</code> for a manually requested query, or <code>"internal"</code> for one produced by a Heartbeat tick.
-    </p>
-    <p><B>Overriding the node via incoming messages</B><br>
-      If the input contains <code>msg.delay</code>, then the delay will be <code>msg.delay</code> units of time, where the units are whatever the units are defaulted to in the node itself. Fractional values are supported (e.g. <code>2.5</code> minutes). In the absence of a <code>msg.delay</code>, or a value that is not strictly numeric — a non-numeric string like <code>"5s"</code> or <code>"abc"</code>, an empty string, a boolean, and so on — the value configured within the node will be used. If the value of <code>msg.delay</code> is less than 0, then 0 is used (the timer fires immediately).
-    </p>
-    <p>
-      If the input contains <code>msg.units</code>, with a value of "milliseconds", "seconds", "minutes" or "hours" then that will override what is defaulted in the node. Both singular and plural forms are accepted and the value is case insensitive. In the absence of a <code>msg.units</code>, or an unknown string in <code>msg.units</code>, the units configured within the node will be used. In the case of an unknown string, a warning message will appear in the Debug logs.
-    </p>
-    <p><b>Pausing and Resuming</b><br>
-      The timer can be paused by sending a message with <code>msg.payload</code> of <code>pause</code> (any case). While paused:
-      <ul>
-        <li>The countdown is frozen at the remaining time</li>
-        <li>The node status shows <code>Paused: HH:MM:SS</code> with a yellow indicator</li>
-        <li>Any incoming message other than recognized control commands will be treated as a blocked restart attempt and routed to output 4 with <code>msg.timerEvent = "restarted"</code> and <code>msg.ignored = true</code></li>
-        <li>Sending another <code>pause</code> message while already paused is routed to output 4 with <code>msg.ignored = true</code></li>
-        <li>Sending a <code>pause</code> message when the timer is not running is routed to output 4 with <code>msg.ignored = true</code>, and the current status is restored</li>
-      </ul>
-      The timer can be resumed by sending a message with <code>msg.payload</code> of <code>resume</code> (any case). On resume:
-      <ul>
-        <li>The countdown restarts from where it was frozen</li>
-        <li>Output 4 sends <code>msg.timerEvent = "resumed"</code></li>
-        <li>Sending a <code>resume</code> message when the timer is not paused is routed to output 4 with <code>msg.ignored = true</code>, and the current status is restored</li>
-      </ul>
-      If the <i>Resume timer on deploy/restart</i> option is enabled and the timer is paused when Node-RED restarts or the flow is redeployed, the timer will restore as paused at the same remaining time — a paused timer is frozen, so Node-RED downtime is <b>not</b> deducted from it. The frozen elapsed time is restored independently as well (so a <code>settime</code> issued while paused survives a restart without distorting the elapsed value).
-    </p>
-    <p><b>Disable and Enable</b><br>
-      The node can be disabled to prevent new timer starts while allowing the current run to complete:
-      <ul>
-        <li><code>disable</code> (any case) — prevents new timer starts. The current timer run continues if running, including any active heartbeat. The timer can still be stopped, paused, resumed, queried, locked, unlocked, and time adjusted while disabled. A redundant disable is routed to output 4 with <code>msg.ignored = true</code>.</li>
-        <li><code>enable</code> (any case) — re-enables new timer starts. A redundant enable is routed to output 4 with <code>msg.ignored = true</code>.</li>
-      </ul>
-      When disabled, the node status shows a grey ring with <code>Disabled | </code> prefixed to the normal status text. The disabled state is persisted to disk if <i>Resume timer on deploy/restart</i> is enabled.
-      <br><br>
-      A blocked start attempt while disabled is routed to output 4 with <code>msg.timerEvent = "started"</code> and <code>msg.ignored = true</code> — it is treated as a blocked true start (not a restart), since the timer is idle when this happens.
-      <br><br>
-      <b>Use case:</b> A dehumidifier runs for 6 hours (timer 1). When it expires, send <code>disable</code> to the node and start a 4 hour rest timer (timer 2). Any start messages received during the 4 hour rest are blocked. When the 4 hour rest expires, send <code>enable</code> to allow the next cycle to start.
-    </p>
-    <p><b>Lock and Unlock</b><br>
-      The Do Not Reset Timer behavior can be toggled at runtime without changing the node configuration:
-      <ul>
-        <li><code>lock</code> (any case) — enables Do Not Reset Timer. Subsequent messages while running are treated as blocked restart attempts and routed to output 4. The ignored count resets to 0. A redundant lock (already locked) is itself routed to output 4 with <code>msg.ignored = true</code>.</li>
-        <li><code>unlock</code> (any case) — disables Do Not Reset Timer. Subsequent messages will reset the timer normally. The ignored count resets to 0. A redundant unlock is itself routed to output 4 with <code>msg.ignored = true</code>.</li>
-      </ul>
-      Both commands work in any timer state. The lock state is persisted to disk if <i>Resume timer on deploy/restart</i> is enabled.
-    </p>
-    <p><b>Ignored Message Threshold Action</b><br>
-      When <i>Do Not Reset Timer on Subsequent Incoming Message</i> is enabled, you can configure an automatic action to take when the ignored message count reaches a configured threshold:
-      <ul>
-        <li><b>Do Nothing (default)</b> — no action taken, count increments indefinitely</li>
-        <li><b>Stop</b> — stops the timer when the threshold is reached</li>
-        <li><b>Pause</b> — pauses the timer when the threshold is reached</li>
-        <li><b>Restart Timer</b> — restarts the timer from the original duration (identical in effect to a message-triggered restart, just internally sourced)</li>
-        <li><b>Add Time</b> — adds a configured amount of time to the timer</li>
-        <li><b>Emit Warning</b> — sends a warning on output 4 without affecting the timer</li>
-      </ul>
-      For all actions except Do Nothing and Emit Warning, the ignored count resets to 0 after the action fires. If the timer is paused when Restart Timer or Add Time fires, the remaining time is updated but the timer stays paused until a <code>resume</code> message is received.
-      <br><br>
-      <b>Scope:</b> threshold actions fire only against an <i>active run</i> — a timer that is <code>running</code> or <code>paused</code>. They never fire while the timer is idle, Disabled, or in Cooldown. Blocked start attempts while Disabled or in Cooldown still increment the visible ignored count (useful for monitoring), but that count can never trip a threshold action. Redundant commands (a <code>lock</code> while already locked, a <code>disable</code> while already disabled, a <code>stop</code> while idle, and so on) never touch the ignored count at all.
-      <br><br>
-      <b>Threshold Count is the master switch:</b> set it to <code>0</code> (the default) to disable threshold actions entirely — the Action dropdown is hidden in the editor while the count is 0, and the runtime ignores the configured action regardless.
-      <br><br>
-      Every threshold action fires on output 4 with <code>msg.source = "internal"</code> and <code>msg.ignored = false</code> (Emit Warning is never an ignored event — it is a deliberate notification). A threshold action that stops the timer also fires on output 2, same as any other stop.
-    </p>
-    <p><b>Special Note on Milliseconds</b><br>
-      While you can set Milliseconds, I would not rely on the accuracy for anything critical.
-    </p>
-    <p><b>Resume timer on deploy/restart</b><br>
-      This option is <b>DISABLED</b> by default. If you <i>ENABLE</i> it (check the checkbox) then if the timer is running and you re-Deploy the flow, or restart Node-RED, then the timer will automatically restart itself where it should be. What does that mean? A couple of examples will help here.
-      <ul>
-        <li>If you had a 10 minute timer running, with 6 minutes elapsed (ie: 4 minutes left) and you hit Deploy, normally the timer would no longer be running, but if you have this feature enabled, the timer will continue running from the 6 minute mark (ie: counting down 4 more minutes and then trigger). This is treated as a Start (output 1 + 4), since the timer is coming back from a stopped/idle state on deploy/restart.</li>
-        <li>If you had a 10 minute timer running, with 6 minutes elapsed (ie: 4 minutes left) and you <i>stopped</i> Node-RED for 2 minutes and then restarted it, normally the timer would no longer be running, but if you have this feature enabled, the timer will continue running from the 8 minute mark (6 minutes from the original run + 2 minutes of Node-RED downtime) -- counting down 2 more minutes and then trigger.</li>
-        <li><b>Special Case</b> If on restart or re-Deploy, there is less than 3 seconds remaining on the timer (or if the timer should have elapsed already) then the timer is set to a random amount between 3 and 8 seconds. This helps to ensure that anything else that needs to initialize before the timer triggers has a chance to do so. It also helps so that if you happen to have a lot of timers, they don't all trigger at once and flood unsuspecting nodes/devices.</li>
-      </ul>
-      <br>
-      A running restore is a <b>continuation</b> of the interrupted run, not a new one: the run's original duration (<code>msg.timerDuration</code>), its accumulated ignored count and last-ignored timestamp, and its elapsed time (including the Node-RED downtime, per the examples above) all survive the restore. Only the Start event on output 1 treats it as a start — that signal exists for downstream consumers, who see the timer coming back from nothing.
-      <br><br>
-      The node's freshly-deployed configuration always wins over persisted settings: changing <i>Status Reporting</i> or <i>Reporting format</i> and redeploying mid-run takes effect immediately on restore.
-      <br><br>
-      <b>Limitation:</b> the ignored count is written to disk only when the next state-changing event triggers a save — ignored messages themselves do not write. A hard crash (as opposed to a clean redeploy or shutdown) can therefore lose ignored counts accumulated since the last save. Timing is never affected, and a lost count can at worst delay a threshold action past its intended trigger point after recovery.
-      <br><br>
-      This persistence is <b>not</b> related to "Persistent Context" (the contextStorage option in <code>settings.js</code>). When the "Resume timer" option is enabled in the node, the node will store timer related information in a <code>timerevents-timers</code> subdirectory of <i>userDir</i> (where <i>userDir</i> is defined in <code>settings.js</code>). If <i>userDir</i> is not explicitly defined, it defaults to a directory called <code>.node-red</code> in your home user directory. The files in this directory will be created/destroyed as needed by the node.
-    </p>
-    <p><b>What is <code>_timerpass</code></b><br>
-      <code>_timerpass</code> is a property added to the outgoing <code>msg</code> when the timer starts or restarts.
-      <code>_timerpass</code> is set to <code>true</code> on that message.
-      <br><br>
-      <b>What does <code>_timerpass</code> do?</b><br>
-      If this node has at any point been stopped by a <i>genuine</i> <code>stop</code> — one that actually stopped something alive (a running timer, a paused timer, or an active Cooldown) AND <br>
-      If this node has not received a message with _timerpass not set since that time THEN <br>
-      any incoming message that has the _timerpass=true property will die within this node with no output.
-      <br><br>
-      A redundant <code>stop</code> (sent while the timer was already idle — <code>stopped</code> or <code>expired</code>) does <b>not</b> arm this filter; it is an ignored command with no state change.
-      <br><br>
-      <b>How does Timer with Events handle this?</b><br>
-      <i>Ignore incoming _timerpass</i> in the node config dialog. If enabled, the node will ignore the presence of the <code>_timerpass</code> property on an incoming message and will process it normally.
-    </p>
-    <p><b>Do Not Reset Timer on Subsequent Incoming Message</b><br>
-      This option is <b>DISABLED</b> by default. If you <i>ENABLE</i> it (check the checkbox) then while the timer is running, any subsequent incoming messages (other than control commands) will be ignored and the timer will continue running undisturbed. The first message always starts the timer normally. This can also be toggled at runtime using the <code>lock</code> and <code>unlock</code> commands.
-      <br><br>
-      When a message is ignored this way, it is routed to output 4 with <code>msg.timerEvent = "restarted"</code> and <code>msg.ignored = true</code>, plus the standard message properties described above.
-      <br><br>
-      When this option is enabled, the node status will show:<br>
-      <code>Remaining: 00:04:32 | Ignored: 3, Last: Jun 27 14:22:05</code>
-    </p>
+  <p><B>General usage</B><br>
+     A countdown timer with four purpose-built outputs. Any incoming <code>msg</code> starts (or, if already running, restarts) the timer unless it carries a recognized control command in <code>msg.payload</code>. All control commands are <b>case insensitive</b>.
+  </p>
+  <p><B>Outputs</B><br>
+    <ul>
+      <li><b>1 - Start</b> — fires only when the timer transitions from stopped/expired into running. Never fires for a restart of an already-running timer, and never fires for a blocked/ignored start attempt (including one blocked by an active Cooldown).</li>
+      <li><b>2 - Stop</b> — fires only on a genuine stop (via the <code>stop</code> command) or a natural expiry. Never fires for a blocked/ignored stop attempt, and never fires again when a Cooldown period ends (see Cooldown below).</li>
+      <li><b>3 - Query</b> — fires in response to an incoming <code>query</code> message, or automatically on each Heartbeat tick (see below). Always carries a full status snapshot.</li>
+      <li><b>4 - Events</b> — fires for every other event, including duplicate copies of Start and Stop events. This is the only output where <code>msg.ignored</code> can be <code>true</code>, marking a command that was received but did not actually change the timer's state.</li>
+    </ul>
+    Output 1 and output 2 never carry an ignored message — anything that didn't truly happen only ever appears on output 4.
+  </p>
+  <p><B>Message properties on all outputs</B><br>
+    Every output message is a clone of the message that triggered it (or, for events with no live trigger of their own — natural expiry, a Heartbeat tick, a threshold action — a clone of the most recent Start/Restart message) with the following properties added:
+    <ul>
+      <li><code>msg.timerEvent</code> — the event type, see the list below</li>
+      <li><code>msg.timerState</code> — the current state of the timer: <code>running</code>, <code>paused</code>, <code>stopped</code>, <code>expired</code>, or <code>cooldown</code></li>
+      <li><code>msg.remainingTime</code> — the remaining time in milliseconds: live wall-clock remaining while <code>running</code>, frozen while <code>paused</code>, the time left in the Cooldown period while in <code>cooldown</code>, and <code>0</code> while idle (<code>stopped</code>/<code>expired</code>)</li>
+      <li><code>msg.timerDuration</code> — the current run's total duration in milliseconds</li>
+      <li><code>msg.elapsedTime</code> — elapsed time in milliseconds, defined per state: while <code>running</code>, wall-clock time since the current run started; while <code>paused</code>, frozen at the value it had at the moment of pause; while in <code>cooldown</code>, the time elapsed <i>into the Cooldown period</i> (so <code>elapsedTime + remainingTime</code> approximates the Cooldown duration); while idle (<code>stopped</code>/<code>expired</code>), <code>0</code> — there is no current run. The genuine <code>stopped</code> and <code>expired</code> events are the exception: they carry the run's <i>final</i> elapsed value, snapshotted the instant before the run ended, so a consumer can see how far the run got.</li>
+      <li><code>msg.ignoredCount</code> — the number of messages ignored during the current timer run</li>
+      <li><code>msg.lastIgnoredTime</code> — ISO 8601 timestamp of the last ignored message, or <code>null</code> if none</li>
+      <li><code>msg.doNotResetTimer</code> — current runtime lock state as a boolean</li>
+      <li><code>msg.disabled</code> — current disabled state as a boolean</li>
+      <li><code>msg.ignored</code> — <code>true</code> if this message was received but did not change the timer's state (always <code>false</code> on outputs 1, 2, and 3)</li>
+      <li><code>msg.source</code> — <code>"external"</code> if a live incoming message triggered this event, or <code>"internal"</code> if the node itself triggered it (a Heartbeat tick, a threshold action, or a persisted restore on deploy/restart)</li>
+    </ul>
+  </p>
+  <p><B>Event types (<code>msg.timerEvent</code>)</B><br>
+    <ul>
+      <li><code>started</code> — the timer transitioned from stopped/expired into running (output 1 + 4), or a blocked start attempt while disabled (output 4 only, <code>ignored:true</code>)</li>
+      <li><code>restarted</code> — an already-running or paused timer's remaining time was reset back to a fresh run (output 4 only). This covers a new message arriving while already running, as well as a blocked restart attempt while paused or locked (<code>ignored:true</code> in the blocked case)</li>
+      <li><code>stopped</code> — the timer was stopped via the <code>stop</code> command (output 2 + 4), or a redundant <code>stop</code> received while the timer was already idle — <code>stopped</code> or <code>expired</code> (output 4 only, <code>ignored:true</code>, zero state change)</li>
+      <li><code>expired</code> — the timer ran to completion naturally (output 2 + 4)</li>
+      <li><code>paused</code> — the timer was paused, or a blocked pause attempt (output 4 only)</li>
+      <li><code>resumed</code> — the timer was resumed, or a blocked resume attempt (output 4 only)</li>
+      <li><code>locked</code> — Do Not Reset Timer enabled at runtime, or a redundant lock attempt (output 4 only)</li>
+      <li><code>unlocked</code> — Do Not Reset Timer disabled at runtime, or a redundant unlock attempt (output 4 only)</li>
+      <li><code>disabled</code> — new timer starts blocked, or a redundant disable attempt (output 4 only)</li>
+      <li><code>enabled</code> — new timer starts allowed again, or a redundant enable attempt (output 4 only)</li>
+      <li><code>timeadjusted</code> — remaining time was adjusted, or a blocked/invalid adjust attempt. <code>msg.timeAdjusted</code> contains the amount (attempted or applied) in milliseconds (output 4 only)</li>
+      <li><code>timeset</code> — remaining time was set to an exact value, or a blocked/invalid attempt. <code>msg.timeSet</code> contains the value (attempted or applied) in milliseconds (output 4 only)</li>
+      <li><code>durationset</code> — the duration for future runs was set, or an invalid attempt. <code>msg.durationSet</code> contains the value (attempted or applied) in milliseconds (output 4 only)</li>
+      <li><code>warning</code> — a threshold Warning fired. This is never <code>ignored:true</code> — it is a deliberate, side-effect-free notification, not a blocked action (output 4 only)</li>
+      <li><code>query</code> — a status snapshot, either requested via a <code>query</code> message or produced by a Heartbeat tick (output 3 only)</li>
+      <li><code>cooldownstarted</code> — a Cooldown period began following a natural expiry (output 4 only, see Cooldown below)</li>
+      <li><code>cooldownended</code> — a Cooldown period completed naturally (output 4 only). This does <b>not</b> repeat <code>expired</code> on output 2 — expiry was already reported once when the countdown originally hit zero</li>
+    </ul>
+  </p>
+  <p><B>Control Commands</B><br>
+    All control commands are case insensitive. The following commands are supported:
+    <ul>
+      <li><code>stop</code> — cancels the timer immediately. <code>stop</code> is genuine whenever there is something alive to kill — a running timer, a paused timer, or an active Cooldown. Sent while the timer is truly idle (<code>stopped</code> or <code>expired</code>) it is a redundant command: routed to output 4 with <code>msg.ignored = true</code> and no state change whatsoever — no counter reset, no <code>expired</code> → <code>stopped</code> state change, and no arming of the <code>_timerpass</code> filter.</li>
+      <li><code>pause</code> — freezes the countdown at the current remaining time</li>
+      <li><code>resume</code> — restarts the countdown from the frozen point</li>
+      <li><code>query</code> — returns a full state snapshot on output 3 without affecting the timer</li>
+      <li><code>lock</code> — enables Do Not Reset Timer at runtime</li>
+      <li><code>unlock</code> — disables Do Not Reset Timer at runtime</li>
+      <li><code>disable</code> — prevents new timer starts. Everything else works normally. The current timer run continues if running.</li>
+      <li><code>enable</code> — re-enables new timer starts</li>
+      <li><code>adjusttime</code> — adds or subtracts time from the current remaining time (running or paused only). Requires <code>msg.adjusttime</code> in milliseconds. Optionally set <code>msg.adjusttimeunits</code> to override units.</li>
+      <li><code>settime</code> — sets the current remaining time to an exact value (running or paused only). Requires <code>msg.settime</code> in milliseconds. Optionally set <code>msg.settimeunits</code>. Must be positive.</li>
+      <li><code>setduration</code> — sets the timer duration for all future runs. Requires <code>msg.setduration</code> in milliseconds. Optionally set <code>msg.setdurationunits</code>. Must be positive. Works in all states.</li>
+    </ul>
+    For all three time commands, a missing or non-numeric value (e.g. <code>"abc"</code>, an empty string, or the property absent entirely) is rejected with no state change: the command is routed to output 4 with <code>msg.ignored = true</code>. The attempted value rides along on <code>msg.timeAdjusted</code> / <code>msg.timeSet</code> / <code>msg.durationSet</code> so a downstream consumer can see what was rejected — as the raw unconvertible value, or <code>null</code> if the property was absent. Numeric-but-invalid values (e.g. <code>settime</code> ≤ 0) are likewise rejected as <code>ignored:true</code>, carrying the converted milliseconds.
+  </p>
+  <p><B>Heartbeat</B><br>
+    Optionally configure a <i>Heartbeat Interval</i> to have the node automatically produce a status snapshot on output 3 (Query) at a fixed, regular cadence while a timer run is active — useful for external monitoring or watchdog systems that need to confirm the node is functioning correctly over long running timers.
+    <ul>
+      <li>Set to <code>0</code> (default) to disable</li>
+      <li>The heartbeat starts the moment the timer starts and fires on a fixed schedule</li>
+      <li>Each tick produces a normal Query-output message with <code>msg.source = "internal"</code>, so it's indistinguishable in shape from a manually requested query — inspect <code>msg.timerState</code> to see whether it landed while running or paused</li>
+      <li>The heartbeat fires whether the timer is running <b>or</b> paused</li>
+      <li>The heartbeat schedule is <b>not</b> affected by pause, resume, adjusttime, settime, or threshold actions — it ticks independently on its own fixed interval once started. A <i>restart</i> of the timer (a new message while already running) does restart the heartbeat schedule from that moment, since a restart begins a new run.</li>
+      <li>The heartbeat stops when the timer is stopped or expires</li>
+      <li><code>disable</code> does not affect an in-progress run's heartbeat — it continues until the run stops or expires naturally</li>
+      <li>After a persisted restart, the heartbeat restarts fresh from that point rather than resuming the original schedule</li>
+    </ul>
+  </p>
+  <p><B>Cooldown</B><br>
+    Optionally configure a <i>Cooldown Duration</i> to automatically prevent the timer from being started again for a fixed period of time after it naturally expires — for example, running for 6 hours and then refusing to start again for at least 4 hours afterward.
+    <ul>
+      <li>Set to <code>0</code> (default) to disable</li>
+      <li>Cooldown begins <b>only</b> after a natural expiry — sending <code>stop</code> ends the timer immediately with no cooldown</li>
+      <li>The sequence is: <code>running</code> → <code>expired</code> (output 2 + 4, fires once) → <code>cooldown</code> (output 4: <code>cooldownstarted</code>) → cooldown ends, settling back to an idle <code>expired</code> state (output 4: <code>cooldownended</code> — <code>expired</code> is <b>not</b> re-fired on output 2)</li>
+      <li>While in Cooldown, new start attempts are blocked and routed to output 4 with <code>msg.timerEvent = "started"</code> and <code>msg.ignored = true</code> — the same treatment as a blocked start while <i>Disabled</i></li>
+      <li><i>Disabled</i> and Cooldown are independent blocking conditions — either one blocks a new start regardless of the other, and enabling/disabling the node has no effect on an active Cooldown</li>
+      <li>Sending <code>stop</code> during Cooldown cancels it immediately and fires a normal <code>stopped</code> event (output 2 + 4) — this is the only way to cut a Cooldown short</li>
+      <li>Threshold actions do not fire during Cooldown — threshold logic is scoped to a genuinely running timer, which Cooldown is not</li>
+      <li>Heartbeat continues ticking normally during Cooldown</li>
+      <li>A <code>query</code> during Cooldown reports <code>msg.timerState = "cooldown"</code> with <code>msg.remainingTime</code> reflecting the time left in the Cooldown period</li>
+      <li>The node status shows a short <code>Cooldown: HH:MM:SS</code> (yellow dot) using the <i>Reporting</i> cadence and format configured above — no ignored-count detail is shown during Cooldown. If the node is also Disabled, the status simply shows <code>Disabled</code></li>
+      <li>Cooldown is persisted and resumed across deploy/restart if <i>Resume timer on deploy/restart</i> is enabled, using the same restore logic as a running or paused timer</li>
+    </ul>
+  </p>
+  <p><B>Status Reporting</B><br>
+    The <i>Status Reporting</i> option controls only the colored status text shown below the node in the editor — it no longer produces any output message (that role is served by the Query output, manually or via Heartbeat). Options:
+    <ul>
+      <li>Never (default)</li>
+      <li>Every Second</li>
+      <li>Every Minute, Last minute by seconds</li>
+    </ul>
+    The last option works as follows:
+    <ul>
+      <li>While there is more than 1 minute remaining, the status will decrement every minute. At the 1 minute point, it switches to updating every second.</li>
+      <li>The exception to this rule is if your duration is not a minute increment. In that case, the first update will be for the partial minute, after which it operates as noted above. (for example: 2.5 minutes will decrement to 2 minutes, then 1 minute, then every second down to zero)</li>
+    </ul>
+    The format is defined by the <i>Reporting Format</i> option: hh:mm:ss (default), or the total number of seconds, minutes, or hours.
+  </p>
+  <p><B>Querying the timer</B><br>
+    Send a message with <code>msg.payload</code> of <code>query</code> (any case) to get a full snapshot of the current timer state on output 3. The timer is not affected in any way by a query message. <code>msg.source</code> will be <code>"external"</code> for a manually requested query, or <code>"internal"</code> for one produced by a Heartbeat tick.
+  </p>
+  <p><B>Overriding the node via incoming messages</B><br>
+    If the input contains <code>msg.delay</code>, then the delay will be <code>msg.delay</code> units of time, where the units are whatever the units are defaulted to in the node itself. Fractional values are supported (e.g. <code>2.5</code> minutes). In the absence of a <code>msg.delay</code>, or a value that is not strictly numeric — a non-numeric string like <code>"5s"</code> or <code>"abc"</code>, an empty string, a boolean, and so on — the value configured within the node will be used. If the value of <code>msg.delay</code> is less than 0, then 0 is used (the timer fires immediately).
+  </p>
+  <p>
+    If the input contains <code>msg.units</code>, with a value of "milliseconds", "seconds", "minutes" or "hours" then that will override what is defaulted in the node. Both singular and plural forms are accepted and the value is case insensitive. In the absence of a <code>msg.units</code>, or an unknown string in <code>msg.units</code>, the units configured within the node will be used. In the case of an unknown string, a warning message will appear in the Debug logs.
+  </p>
+  <p><b>Pausing and Resuming</b><br>
+    The timer can be paused by sending a message with <code>msg.payload</code> of <code>pause</code> (any case). While paused:
+    <ul>
+      <li>The countdown is frozen at the remaining time</li>
+      <li>The node status shows <code>Paused: HH:MM:SS</code> with a yellow indicator</li>
+      <li>Any incoming message other than recognized control commands will be treated as a blocked restart attempt and routed to output 4 with <code>msg.timerEvent = "restarted"</code> and <code>msg.ignored = true</code></li>
+      <li>Sending another <code>pause</code> message while already paused is routed to output 4 with <code>msg.ignored = true</code></li>
+      <li>Sending a <code>pause</code> message when the timer is not running is routed to output 4 with <code>msg.ignored = true</code>, and the current status is restored</li>
+    </ul>
+    The timer can be resumed by sending a message with <code>msg.payload</code> of <code>resume</code> (any case). On resume:
+    <ul>
+      <li>The countdown restarts from where it was frozen</li>
+      <li>Output 4 sends <code>msg.timerEvent = "resumed"</code></li>
+      <li>Sending a <code>resume</code> message when the timer is not paused is routed to output 4 with <code>msg.ignored = true</code>, and the current status is restored</li>
+    </ul>
+    If the <i>Resume timer on deploy/restart</i> option is enabled and the timer is paused when Node-RED restarts or the flow is redeployed, the timer will restore as paused at the same remaining time — a paused timer is frozen, so Node-RED downtime is <b>not</b> deducted from it. The frozen elapsed time is restored independently as well (so a <code>settime</code> issued while paused survives a restart without distorting the elapsed value).
+  </p>
+  <p><b>Disable and Enable</b><br>
+    The node can be disabled to prevent new timer starts while allowing the current run to complete:
+    <ul>
+      <li><code>disable</code> (any case) — prevents new timer starts. The current timer run continues if running, including any active heartbeat. The timer can still be stopped, paused, resumed, queried, locked, unlocked, and time adjusted while disabled. A redundant disable is routed to output 4 with <code>msg.ignored = true</code>.</li>
+      <li><code>enable</code> (any case) — re-enables new timer starts. A redundant enable is routed to output 4 with <code>msg.ignored = true</code>.</li>
+    </ul>
+    When disabled, the node status shows a grey ring with <code>Disabled | </code> prefixed to the normal status text. The disabled state is persisted to disk if <i>Resume timer on deploy/restart</i> is enabled.
+    <br><br>
+    A blocked start attempt while disabled is routed to output 4 with <code>msg.timerEvent = "started"</code> and <code>msg.ignored = true</code> — it is treated as a blocked true start (not a restart), since the timer is idle when this happens.
+    <br><br>
+    <b>Use case:</b> A dehumidifier runs for 6 hours (timer 1). When it expires, send <code>disable</code> to the node and start a 4 hour rest timer (timer 2). Any start messages received during the 4 hour rest are blocked. When the 4 hour rest expires, send <code>enable</code> to allow the next cycle to start.
+  </p>
+  <p><b>Lock and Unlock</b><br>
+    The Do Not Reset Timer behavior can be toggled at runtime without changing the node configuration:
+    <ul>
+      <li><code>lock</code> (any case) — enables Do Not Reset Timer. Subsequent messages while running are treated as blocked restart attempts and routed to output 4. The ignored count resets to 0. A redundant lock (already locked) is itself routed to output 4 with <code>msg.ignored = true</code>.</li>
+      <li><code>unlock</code> (any case) — disables Do Not Reset Timer. Subsequent messages will reset the timer normally. The ignored count resets to 0. A redundant unlock is itself routed to output 4 with <code>msg.ignored = true</code>.</li>
+    </ul>
+    Both commands work in any timer state. The lock state is persisted to disk if <i>Resume timer on deploy/restart</i> is enabled.
+  </p>
+  <p><b>Ignored Message Threshold Action</b><br>
+    When <i>Do Not Reset Timer on Subsequent Incoming Message</i> is enabled, you can configure an automatic action to take when the ignored message count reaches a configured threshold:
+    <ul>
+      <li><b>Do Nothing (default)</b> — no action taken, count increments indefinitely</li>
+      <li><b>Stop</b> — stops the timer when the threshold is reached</li>
+      <li><b>Pause</b> — pauses the timer when the threshold is reached</li>
+      <li><b>Restart Timer</b> — restarts the timer from the original duration (identical in effect to a message-triggered restart, just internally sourced)</li>
+      <li><b>Add Time</b> — adds a configured amount of time to the timer</li>
+      <li><b>Emit Warning</b> — sends a warning on output 4 without affecting the timer</li>
+    </ul>
+    For all actions except Do Nothing and Emit Warning, the ignored count resets to 0 after the action fires. If the timer is paused when Restart Timer or Add Time fires, the remaining time is updated but the timer stays paused until a <code>resume</code> message is received.
+    <br><br>
+    <b>Scope:</b> threshold actions fire only against an <i>active run</i> — a timer that is <code>running</code> or <code>paused</code>. They never fire while the timer is idle, Disabled, or in Cooldown. Blocked start attempts while Disabled or in Cooldown still increment the visible ignored count (useful for monitoring), but that count can never trip a threshold action. Redundant commands (a <code>lock</code> while already locked, a <code>disable</code> while already disabled, a <code>stop</code> while idle, and so on) never touch the ignored count at all.
+    <br><br>
+    <b>Threshold Count is the master switch:</b> set it to <code>0</code> (the default) to disable threshold actions entirely — the Action dropdown is hidden in the editor while the count is 0, and the runtime ignores the configured action regardless.
+    <br><br>
+    Every threshold action fires on output 4 with <code>msg.source = "internal"</code> and <code>msg.ignored = false</code> (Emit Warning is never an ignored event — it is a deliberate notification). A threshold action that stops the timer also fires on output 2, same as any other stop.
+  </p>
+  <p><b>Special Note on Milliseconds</b><br>
+    While you can set Milliseconds, I would not rely on the accuracy for anything critical.
+  </p>
+  <p><b>Resume timer on deploy/restart</b><br>
+    This option is <b>DISABLED</b> by default. If you <i>ENABLE</i> it (check the checkbox) then if the timer is running and you re-Deploy the flow, or restart Node-RED, then the timer will automatically restart itself where it should be. What does that mean? A couple of examples will help here.
+    <ul>
+      <li>If you had a 10 minute timer running, with 6 minutes elapsed (ie: 4 minutes left) and you hit Deploy, normally the timer would no longer be running, but if you have this feature enabled, the timer will continue running from the 6 minute mark (ie: counting down 4 more minutes and then trigger). This is treated as a Start (output 1 + 4), since the timer is coming back from a stopped/idle state on deploy/restart.</li>
+      <li>If you had a 10 minute timer running, with 6 minutes elapsed (ie: 4 minutes left) and you <i>stopped</i> Node-RED for 2 minutes and then restarted it, normally the timer would no longer be running, but if you have this feature enabled, the timer will continue running from the 8 minute mark (6 minutes from the original run + 2 minutes of Node-RED downtime) -- counting down 2 more minutes and then trigger.</li>
+      <li><b>Special Case</b> If on restart or re-Deploy, there is less than 3 seconds remaining on the timer (or if the timer should have elapsed already) then the timer is set to a random amount between 3 and 8 seconds. This helps to ensure that anything else that needs to initialize before the timer triggers has a chance to do so. It also helps so that if you happen to have a lot of timers, they don't all trigger at once and flood unsuspecting nodes/devices.</li>
+    </ul>
+    <br>
+    A running restore is a <b>continuation</b> of the interrupted run, not a new one: the run's original duration (<code>msg.timerDuration</code>), its accumulated ignored count and last-ignored timestamp, and its elapsed time (including the Node-RED downtime, per the examples above) all survive the restore. Only the Start event on output 1 treats it as a start — that signal exists for downstream consumers, who see the timer coming back from nothing.
+    <br><br>
+    The node's freshly-deployed configuration always wins over persisted settings: changing <i>Status Reporting</i> or <i>Reporting format</i> and redeploying mid-run takes effect immediately on restore.
+    <br><br>
+    <b>Limitation:</b> the ignored count is written to disk only when the next state-changing event triggers a save — ignored messages themselves do not write. A hard crash (as opposed to a clean redeploy or shutdown) can therefore lose ignored counts accumulated since the last save. Timing is never affected, and a lost count can at worst delay a threshold action past its intended trigger point after recovery.
+    <br><br>
+    This persistence is <b>not</b> related to "Persistent Context" (the contextStorage option in <code>settings.js</code>). When the "Resume timer" option is enabled in the node, the node will store timer related information in a <code>timerevents-timers</code> subdirectory of <i>userDir</i> (where <i>userDir</i> is defined in <code>settings.js</code>). If <i>userDir</i> is not explicitly defined, it defaults to a directory called <code>.node-red</code> in your home user directory. The files in this directory will be created/destroyed as needed by the node.
+  </p>
+  <p><b>What is <code>_timerpass</code></b><br>
+    <code>_timerpass</code> is a property added to the outgoing <code>msg</code> when the timer starts or restarts.
+    <code>_timerpass</code> is set to <code>true</code> on that message.
+    <br><br>
+    <b>What does <code>_timerpass</code> do?</b><br>
+    If this node has at any point been stopped by a <i>genuine</i> <code>stop</code> — one that actually stopped something alive (a running timer, a paused timer, or an active Cooldown) AND <br>
+    If this node has not received a message with _timerpass not set since that time THEN <br>
+    any incoming message that has the _timerpass=true property will die within this node with no output.
+    <br><br>
+    A redundant <code>stop</code> (sent while the timer was already idle — <code>stopped</code> or <code>expired</code>) does <b>not</b> arm this filter; it is an ignored command with no state change.
+    <br><br>
+    <b>How does Timer with Events handle this?</b><br>
+    <i>Ignore incoming _timerpass</i> in the node config dialog. If enabled, the node will ignore the presence of the <code>_timerpass</code> property on an incoming message and will process it normally.
+  </p>
+  <p><b>Do Not Reset Timer on Subsequent Incoming Message</b><br>
+    This option is <b>DISABLED</b> by default. If you <i>ENABLE</i> it (check the checkbox) then while the timer is running, any subsequent incoming messages (other than control commands) will be ignored and the timer will continue running undisturbed. The first message always starts the timer normally. This can also be toggled at runtime using the <code>lock</code> and <code>unlock</code> commands.
+    <br><br>
+    When a message is ignored this way, it is routed to output 4 with <code>msg.timerEvent = "restarted"</code> and <code>msg.ignored = true</code>, plus the standard message properties described above.
+    <br><br>
+    When this option is enabled, the node status will show:<br>
+    <code>Remaining: 00:04:32 | Ignored: 3, Last: Jun 27 14:22:05</code>
+  </p>
 </script>

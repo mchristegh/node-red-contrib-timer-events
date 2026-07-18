@@ -27,7 +27,7 @@
  * limitations under the License.
  **/
 
-module.exports = function(RED) {
+module.exports = function (RED) {
   "use strict";
 
   // ---------------------------------------------------------------------------
@@ -35,11 +35,11 @@ module.exports = function(RED) {
   // ---------------------------------------------------------------------------
 
   const TIMER_STATE = {
-    RUNNING:  "running",
-    PAUSED:   "paused",
-    STOPPED:  "stopped",
-    EXPIRED:  "expired",
-    COOLDOWN: "cooldown"
+    RUNNING: "running",
+    PAUSED: "paused",
+    STOPPED: "stopped",
+    EXPIRED: "expired",
+    COOLDOWN: "cooldown",
   };
 
   // Canonical event-type list for output 4 (and output 3, for QUERY).
@@ -48,23 +48,23 @@ module.exports = function(RED) {
   // treated as a larger sibling of TIMESET (see design notes on
   // handleInputEvent) and never appears on output 1.
   const TIMER_EVENT = {
-    STARTED:        "started",
-    RESTARTED:      "restarted",
-    STOPPED:        "stopped",
-    EXPIRED:        "expired",
-    PAUSED:         "paused",
-    RESUMED:        "resumed",
-    LOCKED:         "locked",
-    UNLOCKED:       "unlocked",
-    DISABLED:       "disabled",
-    ENABLED:        "enabled",
-    TIMEADJUSTED:   "timeadjusted",
-    TIMESET:        "timeset",
-    DURATIONSET:    "durationset",
-    WARNING:        "warning",
-    QUERY:          "query",
+    STARTED: "started",
+    RESTARTED: "restarted",
+    STOPPED: "stopped",
+    EXPIRED: "expired",
+    PAUSED: "paused",
+    RESUMED: "resumed",
+    LOCKED: "locked",
+    UNLOCKED: "unlocked",
+    DISABLED: "disabled",
+    ENABLED: "enabled",
+    TIMEADJUSTED: "timeadjusted",
+    TIMESET: "timeset",
+    DURATIONSET: "durationset",
+    WARNING: "warning",
+    QUERY: "query",
     COOLDOWNSTARTED: "cooldownstarted",
-    COOLDOWNENDED:   "cooldownended"
+    COOLDOWNENDED: "cooldownended",
   };
 
   // Identifies whether an event was triggered by a live incoming message
@@ -72,21 +72,21 @@ module.exports = function(RED) {
   // tick or a threshold action firing on its own.
   const EVENT_SOURCE = {
     EXTERNAL: "external",
-    INTERNAL: "internal"
+    INTERNAL: "internal",
   };
 
   const UNITS = {
     MILLISECOND: "Millisecond",
-    SECOND:      "Second",
-    MINUTE:      "Minute",
-    HOUR:        "Hour"
+    SECOND: "Second",
+    MINUTE: "Minute",
+    HOUR: "Hour",
   };
 
   const UNITS_INPUT = {
     MILLISECOND: "millisecond",
-    SECOND:      "second",
-    MINUTE:      "minute",
-    HOUR:        "hour"
+    SECOND: "second",
+    MINUTE: "minute",
+    HOUR: "hour",
   };
 
   // Threshold action config values. Note the RESET action results in the
@@ -95,41 +95,41 @@ module.exports = function(RED) {
   // restart - see handleThresholdAction().
   const THRESHOLD_ACTION = {
     DONOTHING: "donothing",
-    STOP:      "stop",
-    PAUSE:     "pause",
-    RESET:     "reset",
-    ADDTIME:   "addtime",
-    WARNING:   "warning"
+    STOP: "stop",
+    PAUSE: "pause",
+    RESET: "reset",
+    ADDTIME: "addtime",
+    WARNING: "warning",
   };
 
   const PAYLOAD = {
-    STOP:        "stop",
-    PAUSE:       "pause",
-    RESUME:      "resume",
-    QUERY:       "query",
-    LOCK:        "lock",
-    UNLOCK:      "unlock",
-    DISABLE:     "disable",
-    ENABLE:      "enable",
-    ADJUSTTIME:  "adjusttime",
-    SETTIME:     "settime",
-    SETDURATION: "setduration"
+    STOP: "stop",
+    PAUSE: "pause",
+    RESUME: "resume",
+    QUERY: "query",
+    LOCK: "lock",
+    UNLOCK: "unlock",
+    DISABLE: "disable",
+    ENABLE: "enable",
+    ADJUSTTIME: "adjusttime",
+    SETTIME: "settime",
+    SETDURATION: "setduration",
   };
 
   const REPORTING_FORMAT = {
-    HUMAN:   "human",
+    HUMAN: "human",
     SECONDS: "seconds",
     MINUTES: "minutes",
-    HOURS:   "hours"
+    HOURS: "hours",
   };
 
   // Reporting only drives the node's status label now (see startReporting).
   // It no longer produces its own output message - that role is served by
   // the query output (manual query or heartbeat tick).
   const REPORTING = {
-    NONE:                "none",
-    EVERY_SECOND:        "every_second",
-    LAST_MINUTE_SECONDS: "last_minute_seconds"
+    NONE: "none",
+    EVERY_SECOND: "every_second",
+    LAST_MINUTE_SECONDS: "last_minute_seconds",
   };
 
   // ---------------------------------------------------------------------------
@@ -138,102 +138,134 @@ module.exports = function(RED) {
 
   function TimerEvents(n) {
     RED.nodes.createNode(this, n);
-    let fs   = require('fs');
-    let path = require('path');
+    const fs = require("fs");
+    const path = require("path");
     let nodefile = n.id.toString();
     let nodepath = "";
-    require('./cycle.js');
+    require("./cycle.js");
 
     if (n._alias != null) {
       nodepath = n._flow.path.replace(/\//g, "-") + "-";
       nodefile = n._alias;
     }
 
-    const stvdtimersFile = path.join(RED.settings.userDir, "timerevents-timers", nodepath + nodefile);
+    const stvdtimersFile = path.join(
+      RED.settings.userDir,
+      "timerevents-timers",
+      nodepath + nodefile,
+    );
 
     // -------------------------------------------------------------------------
     // Node property initialization
     // -------------------------------------------------------------------------
 
-    this.units                 = n.units                 || UNITS.SECOND;
-    this.durationType          = n.durationType;
-    this.duration              = isNaN(Number(RED.util.evaluateNodeProperty(n.duration, this.durationType, this, null))) ? 5 : Number(RED.util.evaluateNodeProperty(n.duration, this.durationType, this, null));
-    this.reporting             = n.reporting             || REPORTING.NONE;
-    this.reportingformat       = n.reportingformat       || REPORTING_FORMAT.HUMAN;
-    this.persist               = n.persist               || false;
-    this.ignoretimerpass       = n.ignoretimerpass       || false;
-    this.donotresettimer       = n.donotresettimer       || false;
-    this.thresholdaction       = n.thresholdaction       || THRESHOLD_ACTION.DONOTHING;
-    this.thresholdcount        = isNaN(Number(n.thresholdcount))   ? 0 : Number(n.thresholdcount);
-    this.thresholdaddtime      = isNaN(Number(n.thresholdaddtime)) ? 0 : Number(n.thresholdaddtime);
+    this.units = n.units || UNITS.SECOND;
+    this.durationType = n.durationType;
+    this.duration = isNaN(
+      Number(
+        RED.util.evaluateNodeProperty(
+          n.duration,
+          this.durationType,
+          this,
+          null,
+        ),
+      ),
+    )
+      ? 5
+      : Number(
+          RED.util.evaluateNodeProperty(
+            n.duration,
+            this.durationType,
+            this,
+            null,
+          ),
+        );
+    this.reporting = n.reporting || REPORTING.NONE;
+    this.reportingformat = n.reportingformat || REPORTING_FORMAT.HUMAN;
+    this.persist = n.persist || false;
+    this.ignoretimerpass = n.ignoretimerpass || false;
+    this.donotresettimer = n.donotresettimer || false;
+    this.thresholdaction = n.thresholdaction || THRESHOLD_ACTION.DONOTHING;
+    this.thresholdcount = isNaN(Number(n.thresholdcount))
+      ? 0
+      : Number(n.thresholdcount);
+    this.thresholdaddtime = isNaN(Number(n.thresholdaddtime))
+      ? 0
+      : Number(n.thresholdaddtime);
     this.thresholdaddtimeunits = n.thresholdaddtimeunits || UNITS.SECOND;
-    this.heartbeatinterval      = isNaN(Number(n.heartbeatinterval)) ? 0 : Number(n.heartbeatinterval);
+    this.heartbeatinterval = isNaN(Number(n.heartbeatinterval))
+      ? 0
+      : Number(n.heartbeatinterval);
     this.heartbeatintervalunits = n.heartbeatintervalunits || UNITS.SECOND;
-    this.cooldownduration       = isNaN(Number(n.cooldownduration)) ? 0 : Number(n.cooldownduration);
-    this.cooldownunits          = n.cooldownunits || UNITS.SECOND;
+    this.cooldownduration = isNaN(Number(n.cooldownduration))
+      ? 0
+      : Number(n.cooldownduration);
+    this.cooldownunits = n.cooldownunits || UNITS.SECOND;
 
     if (this.duration <= 0) {
       this.duration = 0;
     } else {
       if (this.units === UNITS.SECOND) this.duration = this.duration * 1000;
-      if (this.units === UNITS.MINUTE) this.duration = this.duration * 1000 * 60;
-      if (this.units === UNITS.HOUR)   this.duration = this.duration * 1000 * 60 * 60;
+      if (this.units === UNITS.MINUTE)
+        this.duration = this.duration * 1000 * 60;
+      if (this.units === UNITS.HOUR)
+        this.duration = this.duration * 1000 * 60 * 60;
     }
 
-    let node = this;
+    const node = this;
 
     // -------------------------------------------------------------------------
     // Runtime state variables
     // -------------------------------------------------------------------------
 
-    let timeout               = null;
-    let miniTimeout           = null;
-    let countdown             = null;
-    let heartbeatTimer        = null;   // setInterval handle for heartbeat, independent of clearAllTimers
-    let stopped               = false;
-    let paused                = false;
-    let disabled              = false;
+    let timeout = null;
+    let miniTimeout = null;
+    let countdown = null;
+    let heartbeatTimer = null; // setInterval handle for heartbeat, independent of clearAllTimers
+    let stopped = false;
+    let paused = false;
+    let disabled = false;
     let delayRemainingDisplay = 0;
-    let delayFactor           = 1000;
-    let reporting             = this.reporting;
-    let reportingformat       = this.reportingformat;
+    let delayFactor = 1000;
+    let reporting = this.reporting;
+    let reportingformat = this.reportingformat;
 
     const maxTimeout = 2147483647;
-    let actualDelayInUse      = 0;
-    let actualDelayRemaining  = 0;
+    let actualDelayInUse = 0;
+    let actualDelayRemaining = 0;
 
-    let ignoredCount          = 0;
-    let lastIgnoredTime       = null;
-    let timerRunning          = false;
-    let timerState            = TIMER_STATE.STOPPED;
-    let timerStartTime        = null;
-    let timerDuration         = 0;
-    let originalMsg           = null;   // last true start/restart's triggering msg; reused as the
-                                         // payload base for events that have no live triggering msg
-                                         // of their own (expiry, heartbeat, threshold actions, etc.)
-    let overrideDuration      = null;
+    let ignoredCount = 0;
+    let lastIgnoredTime = null;
+    let timerRunning = false;
+    let timerState = TIMER_STATE.STOPPED;
+    let timerStartTime = null;
+    let timerDuration = 0;
+    let originalMsg = null; // last true start/restart's triggering msg; reused as the
+    // payload base for events that have no live triggering msg
+    // of their own (expiry, heartbeat, threshold actions, etc.)
+    let overrideDuration = null;
 
     // Authoritative wall-clock remaining-time state. delayRemainingDisplay /
     // cooldownRemainingDisplay above are display-only counters driven by the
     // cosmetic reporting intervals and must never be used as a source of
     // truth - with reporting set to "none" they do not decrement at all.
     // getRemainingTime() derives the true remaining time from these instead:
-    let expiryTarget          = null;   // ms epoch timestamp the running timer will fire at; null when not running
-    let frozenRemaining       = null;   // exact remaining ms captured at the moment of pause; null when not paused
-    let frozenElapsed         = null;   // exact elapsed ms captured at the moment of pause; null when not paused
-    let cooldownExpiryTarget  = null;   // ms epoch timestamp the cooldown period ends at; null when not in cooldown
+    let expiryTarget = null; // ms epoch timestamp the running timer will fire at; null when not running
+    let frozenRemaining = null; // exact remaining ms captured at the moment of pause; null when not paused
+    let frozenElapsed = null; // exact elapsed ms captured at the moment of pause; null when not paused
+    let cooldownExpiryTarget = null; // ms epoch timestamp the cooldown period ends at; null when not in cooldown
 
     // Cooldown - a self-expiring, timed block on new starts that begins
     // automatically after a natural expiry (never after an explicit stop).
     // Deliberately kept on its own timer handles, fully independent of the
     // main timeout/countdown/miniTimeout, so clearAllTimers() (used freely
     // elsewhere) can never accidentally interrupt an in-progress cooldown.
-    let cooldownActive               = false;
-    let cooldownRemainingDisplay     = 0;
-    let cooldownTimeout              = null;
-    let cooldownReportInterval       = null;
-    let cooldownReportMiniTimeout    = null;
-    let actualCooldownDelayInUse     = 0;
+    let cooldownActive = false;
+    let cooldownRemainingDisplay = 0;
+    let cooldownTimeout = null;
+    let cooldownReportInterval = null;
+    let cooldownReportMiniTimeout = null;
+    let actualCooldownDelayInUse = 0;
     let actualCooldownDelayRemaining = 0;
 
     // -------------------------------------------------------------------------
@@ -243,9 +275,9 @@ module.exports = function(RED) {
     if (this.persist === true) {
       try {
         if (fs.existsSync(stvdtimersFile)) {
-          let savedState = JSON.retrocycle(JSON.parse(readState()));
-          let targetMS   = (new Date(savedState.time.toString())).getTime();
-          let nowMS      = (new Date()).getTime();
+          const savedState = JSON.retrocycle(JSON.parse(readState()));
+          let targetMS = new Date(savedState.time.toString()).getTime();
+          const nowMS = new Date().getTime();
 
           // Note: reporting / reportingformat are deliberately NOT restored
           // from the persisted file - the node's freshly-deployed config
@@ -254,29 +286,48 @@ module.exports = function(RED) {
           // still written to disk for backward compatibility with old
           // persist files; they are simply ignored on read.)
 
-          if (typeof savedState.ignoredCount     !== 'undefined') ignoredCount         = savedState.ignoredCount;
-          if (typeof savedState.lastIgnoredTime  !== 'undefined' && savedState.lastIgnoredTime !== null) {
+          if (typeof savedState.ignoredCount !== "undefined")
+            ignoredCount = savedState.ignoredCount;
+          if (
+            typeof savedState.lastIgnoredTime !== "undefined" &&
+            savedState.lastIgnoredTime !== null
+          ) {
             lastIgnoredTime = new Date(savedState.lastIgnoredTime);
           }
-          if (typeof savedState.timerStartTime   !== 'undefined' && savedState.timerStartTime !== null) {
+          if (
+            typeof savedState.timerStartTime !== "undefined" &&
+            savedState.timerStartTime !== null
+          ) {
             timerStartTime = new Date(savedState.timerStartTime);
           }
-          if (typeof savedState.timerState       !== 'undefined') timerState           = savedState.timerState;
-          if (typeof savedState.donotresettimer  !== 'undefined') node.donotresettimer = savedState.donotresettimer;
-          if (typeof savedState.overrideDuration !== 'undefined' && savedState.overrideDuration !== null) {
+          if (typeof savedState.timerState !== "undefined")
+            timerState = savedState.timerState;
+          if (typeof savedState.donotresettimer !== "undefined")
+            node.donotresettimer = savedState.donotresettimer;
+          if (
+            typeof savedState.overrideDuration !== "undefined" &&
+            savedState.overrideDuration !== null
+          ) {
             overrideDuration = savedState.overrideDuration;
           }
-          if (typeof savedState.disabled !== 'undefined') disabled = savedState.disabled;
+          if (typeof savedState.disabled !== "undefined")
+            disabled = savedState.disabled;
 
           if (savedState.cooldownActive === true) {
             let remainingMS = targetMS - nowMS;
-            if (remainingMS <= 0) remainingMS = (Math.floor((Math.random() * 5) + 3) * 1000);
+            if (remainingMS <= 0)
+              remainingMS = Math.floor(Math.random() * 5 + 3) * 1000;
             cooldownRemainingDisplay = remainingMS;
-            cooldownActive           = true;
-            cooldownExpiryTarget     = Date.now() + remainingMS;
-            timerState               = TIMER_STATE.COOLDOWN;
-            originalMsg              = savedState.origmsg;
-            node.status(buildStatus(displayTime(cooldownRemainingDisplay, node.reportingformat), TIMER_STATE.COOLDOWN));
+            cooldownActive = true;
+            cooldownExpiryTarget = Date.now() + remainingMS;
+            timerState = TIMER_STATE.COOLDOWN;
+            originalMsg = savedState.origmsg;
+            node.status(
+              buildStatus(
+                displayTime(cooldownRemainingDisplay, node.reportingformat),
+                TIMER_STATE.COOLDOWN,
+              ),
+            );
             startCooldownTimeout();
             startCooldownReporting();
             // Heartbeat restarts fresh after a restore - does not recalculate original schedule
@@ -288,33 +339,44 @@ module.exports = function(RED) {
             // frozen snapshot directly; fall back to the legacy
             // target-minus-now calculation only for old persist files that
             // predate the `remaining` field.
-            let remainingMS = typeof savedState.remaining === 'number'
-              ? savedState.remaining
-              : targetMS - nowMS;
-            if (remainingMS <= 0) remainingMS = (Math.floor((Math.random() * 5) + 3) * 1000);
+            let remainingMS =
+              typeof savedState.remaining === "number"
+                ? savedState.remaining
+                : targetMS - nowMS;
+            if (remainingMS <= 0)
+              remainingMS = Math.floor(Math.random() * 5 + 3) * 1000;
             delayRemainingDisplay = remainingMS;
             frozenRemaining = remainingMS;
-            timerDuration  = typeof savedState.timerDuration !== 'undefined' ? savedState.timerDuration : remainingMS;
+            timerDuration =
+              typeof savedState.timerDuration !== "undefined"
+                ? savedState.timerDuration
+                : remainingMS;
             // frozenElapsed is persisted independently because settime
             // while paused changes remaining without touching elapsed -
             // deriving it from duration-remaining would be wrong in that
             // case. Derivation remains the fallback for old files.
-            frozenElapsed  = typeof savedState.frozenElapsed === 'number'
-              ? savedState.frozenElapsed
-              : Math.max(0, timerDuration - remainingMS);
+            frozenElapsed =
+              typeof savedState.frozenElapsed === "number"
+                ? savedState.frozenElapsed
+                : Math.max(0, timerDuration - remainingMS);
             timerStartTime = new Date(nowMS - (timerDuration - remainingMS));
-            paused         = true;
-            timerRunning   = false;
-            timerState     = TIMER_STATE.PAUSED;
-            originalMsg    = savedState.origmsg;
-            node.status(buildStatus(displayTime(delayRemainingDisplay, node.reportingformat), TIMER_STATE.PAUSED));
+            paused = true;
+            timerRunning = false;
+            timerState = TIMER_STATE.PAUSED;
+            originalMsg = savedState.origmsg;
+            node.status(
+              buildStatus(
+                displayTime(delayRemainingDisplay, node.reportingformat),
+                TIMER_STATE.PAUSED,
+              ),
+            );
             // Heartbeat restarts fresh after a restore - does not recalculate original schedule
             startHeartbeat();
           } else {
-            if ((targetMS - nowMS) <= 3000) {
-              targetMS = (Math.floor((Math.random() * 5) + 3) * 1000);
+            if (targetMS - nowMS <= 3000) {
+              targetMS = Math.floor(Math.random() * 5 + 3) * 1000;
             } else {
-              targetMS = (Math.round((targetMS - nowMS) / 1000)) * 1000;
+              targetMS = Math.round((targetMS - nowMS) / 1000) * 1000;
             }
             savedState.origmsg.units = UNITS_INPUT.MILLISECOND;
             savedState.origmsg.delay = targetMS;
@@ -324,7 +386,10 @@ module.exports = function(RED) {
             // the paused branch above - Node-RED downtime counts as elapsed
             // time, so elapsedTime + remainingTime reconciles with
             // timerDuration immediately after restore.
-            timerDuration  = typeof savedState.timerDuration !== 'undefined' ? savedState.timerDuration : targetMS;
+            timerDuration =
+              typeof savedState.timerDuration !== "undefined"
+                ? savedState.timerDuration
+                : targetMS;
             timerStartTime = new Date(nowMS - (timerDuration - targetMS));
             // A running restore is a true stopped/expired -> running transition,
             // so it is treated as a start (output 1) with an internal source.
@@ -335,7 +400,12 @@ module.exports = function(RED) {
           }
         }
       } catch (error) {
-        this.error("Error processing persistent file data for timer-events node " + n.id.toString() + "\n\n" + error.toString());
+        this.error(
+          "Error processing persistent file data for timer-events node " +
+            n.id.toString() +
+            "\n\n" +
+            error.toString(),
+        );
       }
     } else {
       deleteState();
@@ -345,15 +415,15 @@ module.exports = function(RED) {
     // Event listeners
     // -------------------------------------------------------------------------
 
-    this.on("input", function(msg) {
+    this.on("input", function (msg) {
       handleInputEvent(msg, false);
     });
 
-    this.on("close", function(removed, done) {
-      if (timeout)        clearTimeout(timeout);
-      if (countdown)       clearInterval(countdown);
-      if (miniTimeout)     clearTimeout(miniTimeout);
-      if (heartbeatTimer)  clearInterval(heartbeatTimer);
+    this.on("close", function (removed, done) {
+      if (timeout) clearTimeout(timeout);
+      if (countdown) clearInterval(countdown);
+      if (miniTimeout) clearTimeout(miniTimeout);
+      if (heartbeatTimer) clearInterval(heartbeatTimer);
       clearCooldownTimers();
       node.status({});
       if (removed) deleteState();
@@ -365,26 +435,38 @@ module.exports = function(RED) {
     // -------------------------------------------------------------------------
 
     function buildStatus(timeDisplay, state) {
-      let baseText = "";
-      let fill     = "green";
-      let shape    = "dot";
+      let baseText;
+      let fill;
+      let shape;
 
       if (state === TIMER_STATE.STOPPED || state === TIMER_STATE.EXPIRED) {
-        fill  = state === TIMER_STATE.STOPPED ? "red" : "blue";
+        fill = state === TIMER_STATE.STOPPED ? "red" : "blue";
         shape = state === TIMER_STATE.STOPPED ? "ring" : "square";
         if (node.donotresettimer) {
-          let lastStr    = lastIgnoredTime ? formatIgnoredTime(lastIgnoredTime) : "--";
-          let stateLabel = state === TIMER_STATE.STOPPED ? "Stopped" : "Expired";
-          baseText = stateLabel + " | Ignored: " + ignoredCount + ", Last: " + lastStr;
+          const lastStr = lastIgnoredTime
+            ? formatIgnoredTime(lastIgnoredTime)
+            : "--";
+          const stateLabel =
+            state === TIMER_STATE.STOPPED ? "Stopped" : "Expired";
+          baseText =
+            stateLabel + " | Ignored: " + ignoredCount + ", Last: " + lastStr;
         } else {
           baseText = state === TIMER_STATE.STOPPED ? "stopped" : "expired";
         }
       } else if (state === TIMER_STATE.PAUSED) {
-        fill  = "yellow";
+        fill = "yellow";
         shape = "ring";
         if (node.donotresettimer) {
-          let lastStr = lastIgnoredTime ? formatIgnoredTime(lastIgnoredTime) : "--";
-          baseText = "Paused: " + timeDisplay + " | Ignored: " + ignoredCount + ", Last: " + lastStr;
+          const lastStr = lastIgnoredTime
+            ? formatIgnoredTime(lastIgnoredTime)
+            : "--";
+          baseText =
+            "Paused: " +
+            timeDisplay +
+            " | Ignored: " +
+            ignoredCount +
+            ", Last: " +
+            lastStr;
         } else {
           baseText = "Paused: " + timeDisplay;
         }
@@ -392,15 +474,23 @@ module.exports = function(RED) {
         // Deliberately short, no ignored-count/last-ignored detail here -
         // ignored messages during cooldown aren't actionable the way they
         // are while running, so surfacing them would just add clutter.
-        fill     = "yellow";
-        shape    = "dot";
+        fill = "yellow";
+        shape = "dot";
         baseText = "Cooldown: " + timeDisplay;
       } else {
-        fill  = "green";
+        fill = "green";
         shape = "dot";
         if (node.donotresettimer) {
-          let lastStr = lastIgnoredTime ? formatIgnoredTime(lastIgnoredTime) : "--";
-          baseText = "Remaining: " + timeDisplay + " | Ignored: " + ignoredCount + ", Last: " + lastStr;
+          const lastStr = lastIgnoredTime
+            ? formatIgnoredTime(lastIgnoredTime)
+            : "--";
+          baseText =
+            "Remaining: " +
+            timeDisplay +
+            " | Ignored: " +
+            ignoredCount +
+            ", Last: " +
+            lastStr;
         } else {
           baseText = timeDisplay;
         }
@@ -421,12 +511,31 @@ module.exports = function(RED) {
     // -------------------------------------------------------------------------
 
     function formatIgnoredTime(date) {
-      const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-      return months[date.getMonth()]                    + " " +
-             String(date.getDate()).padStart(2, "0")    + " " +
-             String(date.getHours()).padStart(2, "0")   + ":" +
-             String(date.getMinutes()).padStart(2, "0") + ":" +
-             String(date.getSeconds()).padStart(2, "0");
+      const months = [
+        "Jan",
+        "Feb",
+        "Mar",
+        "Apr",
+        "May",
+        "Jun",
+        "Jul",
+        "Aug",
+        "Sep",
+        "Oct",
+        "Nov",
+        "Dec",
+      ];
+      return (
+        months[date.getMonth()] +
+        " " +
+        String(date.getDate()).padStart(2, "0") +
+        " " +
+        String(date.getHours()).padStart(2, "0") +
+        ":" +
+        String(date.getMinutes()).padStart(2, "0") +
+        ":" +
+        String(date.getSeconds()).padStart(2, "0")
+      );
     }
 
     /**
@@ -442,7 +551,10 @@ module.exports = function(RED) {
      */
     function getElapsedTime() {
       if (timerState === TIMER_STATE.COOLDOWN) {
-        let cooldownFullMS = convertToMilliseconds(node.cooldownduration, node.cooldownunits);
+        const cooldownFullMS = convertToMilliseconds(
+          node.cooldownduration,
+          node.cooldownunits,
+        );
         return Math.max(0, cooldownFullMS - getRemainingTime());
       }
       if (paused) {
@@ -467,7 +579,9 @@ module.exports = function(RED) {
      */
     function getRemainingTime() {
       if (timerState === TIMER_STATE.COOLDOWN) {
-        return cooldownExpiryTarget !== null ? Math.max(0, cooldownExpiryTarget - Date.now()) : 0;
+        return cooldownExpiryTarget !== null
+          ? Math.max(0, cooldownExpiryTarget - Date.now())
+          : 0;
       }
       if (paused) {
         return frozenRemaining !== null ? frozenRemaining : 0;
@@ -490,11 +604,16 @@ module.exports = function(RED) {
 
     function convertToMilliseconds(value, units) {
       switch (units) {
-        case UNITS.SECOND:      return value * 1000;
-        case UNITS.MINUTE:      return value * 1000 * 60;
-        case UNITS.HOUR:        return value * 1000 * 60 * 60;
-        case UNITS.MILLISECOND: return value;
-        default:                return value;
+        case UNITS.SECOND:
+          return value * 1000;
+        case UNITS.MINUTE:
+          return value * 1000 * 60;
+        case UNITS.HOUR:
+          return value * 1000 * 60 * 60;
+        case UNITS.MILLISECOND:
+          return value;
+        default:
+          return value;
       }
     }
 
@@ -508,26 +627,32 @@ module.exports = function(RED) {
      * must test the result with Number.isFinite before using it.
      */
     function toFiniteNumber(value) {
-      if (typeof value === 'number') {
+      if (typeof value === "number") {
         return Number.isFinite(value) ? value : NaN;
       }
-      if (typeof value === 'string' && value.trim() !== '') {
-        let num = Number(value);
+      if (typeof value === "string" && value.trim() !== "") {
+        const num = Number(value);
         return Number.isFinite(num) ? num : NaN;
       }
       return NaN;
     }
 
     function normalizeUnits(units) {
-      return typeof units === 'string' ? units.toLowerCase().replace(/s$/, '') : null;
+      return typeof units === "string"
+        ? units.toLowerCase().replace(/s$/, "")
+        : null;
     }
 
     function msgValueToMs(value, units) {
       switch (units) {
-        case UNITS_INPUT.SECOND: return value * 1000;
-        case UNITS_INPUT.MINUTE: return value * 1000 * 60;
-        case UNITS_INPUT.HOUR:   return value * 1000 * 60 * 60;
-        default:                 return value;
+        case UNITS_INPUT.SECOND:
+          return value * 1000;
+        case UNITS_INPUT.MINUTE:
+          return value * 1000 * 60;
+        case UNITS_INPUT.HOUR:
+          return value * 1000 * 60 * 60;
+        default:
+          return value;
       }
     }
 
@@ -543,18 +668,20 @@ module.exports = function(RED) {
      * `source` fields used across every output.
      */
     function buildEventMessage(timerEvent, baseMsg, ignored, source) {
-      let evtMsg = RED.util.cloneMessage(baseMsg || {});
-      evtMsg.timerEvent      = timerEvent;
-      evtMsg.timerState      = timerState;
-      evtMsg.remainingTime   = getRemainingTime();
-      evtMsg.timerDuration   = timerDuration;
-      evtMsg.elapsedTime     = getElapsedTime();
-      evtMsg.ignoredCount    = ignoredCount;
-      evtMsg.lastIgnoredTime = lastIgnoredTime ? lastIgnoredTime.toISOString() : null;
+      const evtMsg = RED.util.cloneMessage(baseMsg || {});
+      evtMsg.timerEvent = timerEvent;
+      evtMsg.timerState = timerState;
+      evtMsg.remainingTime = getRemainingTime();
+      evtMsg.timerDuration = timerDuration;
+      evtMsg.elapsedTime = getElapsedTime();
+      evtMsg.ignoredCount = ignoredCount;
+      evtMsg.lastIgnoredTime = lastIgnoredTime
+        ? lastIgnoredTime.toISOString()
+        : null;
       evtMsg.doNotResetTimer = node.donotresettimer;
-      evtMsg.disabled        = disabled;
-      evtMsg.ignored         = ignored;
-      evtMsg.source          = source;
+      evtMsg.disabled = disabled;
+      evtMsg.ignored = ignored;
+      evtMsg.source = source;
       return evtMsg;
     }
 
@@ -576,10 +703,11 @@ module.exports = function(RED) {
      * durationSet) to be layered onto the built message.
      */
     function dispatchEvent(timerEvent, baseMsg, ignored, source, extraProps) {
-      let evtMsg = buildEventMessage(timerEvent, baseMsg, ignored, source);
+      const evtMsg = buildEventMessage(timerEvent, baseMsg, ignored, source);
       if (extraProps) {
-        for (let key in extraProps) {
-          if (Object.prototype.hasOwnProperty.call(extraProps, key)) evtMsg[key] = extraProps[key];
+        for (const key in extraProps) {
+          if (Object.prototype.hasOwnProperty.call(extraProps, key))
+            evtMsg[key] = extraProps[key];
         }
       }
 
@@ -590,12 +718,15 @@ module.exports = function(RED) {
 
       let out1 = null;
       let out2 = null;
-      let out4 = evtMsg;
+      const out4 = evtMsg;
 
       if (!ignored) {
         if (timerEvent === TIMER_EVENT.STARTED) {
           out1 = RED.util.cloneMessage(evtMsg);
-        } else if (timerEvent === TIMER_EVENT.STOPPED || timerEvent === TIMER_EVENT.EXPIRED) {
+        } else if (
+          timerEvent === TIMER_EVENT.STOPPED ||
+          timerEvent === TIMER_EVENT.EXPIRED
+        ) {
           out2 = RED.util.cloneMessage(evtMsg);
         }
       }
@@ -616,8 +747,8 @@ module.exports = function(RED) {
       clearTimeout(timeout);
       clearTimeout(miniTimeout);
       clearInterval(countdown);
-      timeout     = null;
-      countdown   = null;
+      timeout = null;
+      countdown = null;
       miniTimeout = null;
     }
 
@@ -638,10 +769,18 @@ module.exports = function(RED) {
         heartbeatTimer = null;
       }
       if (node.heartbeatinterval > 0) {
-        let intervalMS = convertToMilliseconds(node.heartbeatinterval, node.heartbeatintervalunits);
+        const intervalMS = convertToMilliseconds(
+          node.heartbeatinterval,
+          node.heartbeatintervalunits,
+        );
         if (intervalMS > 0) {
-          heartbeatTimer = setInterval(function() {
-            dispatchEvent(TIMER_EVENT.QUERY, originalMsg, false, EVENT_SOURCE.INTERNAL);
+          heartbeatTimer = setInterval(function () {
+            dispatchEvent(
+              TIMER_EVENT.QUERY,
+              originalMsg,
+              false,
+              EVENT_SOURCE.INTERNAL,
+            );
           }, intervalMS);
         }
       }
@@ -660,10 +799,10 @@ module.exports = function(RED) {
     function startTimeout(msg) {
       actualDelayRemaining = delayRemainingDisplay;
       if (actualDelayRemaining > maxTimeout) {
-        actualDelayInUse     = maxTimeout;
+        actualDelayInUse = maxTimeout;
         actualDelayRemaining = actualDelayRemaining - maxTimeout;
       } else {
-        actualDelayInUse     = actualDelayRemaining;
+        actualDelayInUse = actualDelayRemaining;
         actualDelayRemaining = 0;
       }
       timeout = setTimeout(timerElapsed, actualDelayInUse, msg);
@@ -678,47 +817,84 @@ module.exports = function(RED) {
      */
     function startReporting() {
       if (reporting === REPORTING.NONE) {
-        node.status(buildStatus(displayTime(delayRemainingDisplay, reportingformat), TIMER_STATE.RUNNING));
+        node.status(
+          buildStatus(
+            displayTime(delayRemainingDisplay, reportingformat),
+            TIMER_STATE.RUNNING,
+          ),
+        );
         return;
       }
 
-      node.status(buildStatus(displayTime(delayRemainingDisplay, reportingformat), TIMER_STATE.RUNNING));
+      node.status(
+        buildStatus(
+          displayTime(delayRemainingDisplay, reportingformat),
+          TIMER_STATE.RUNNING,
+        ),
+      );
 
-      if ((delayRemainingDisplay > 60000) && (reporting === REPORTING.LAST_MINUTE_SECONDS)) {
-        miniTimeout = setTimeout(function() {
-          if ((delayRemainingDisplay % 60000) !== 0) {
-            delayRemainingDisplay -= (delayRemainingDisplay % 60000);
-            node.status(buildStatus(displayTime(delayRemainingDisplay, reportingformat), TIMER_STATE.RUNNING));
+      if (
+        delayRemainingDisplay > 60000 &&
+        reporting === REPORTING.LAST_MINUTE_SECONDS
+      ) {
+        miniTimeout = setTimeout(function () {
+          if (delayRemainingDisplay % 60000 !== 0) {
+            delayRemainingDisplay -= delayRemainingDisplay % 60000;
+            node.status(
+              buildStatus(
+                displayTime(delayRemainingDisplay, reportingformat),
+                TIMER_STATE.RUNNING,
+              ),
+            );
           }
 
           if (delayRemainingDisplay <= 60000) {
-            countdown = setInterval(function() {
+            countdown = setInterval(function () {
               delayRemainingDisplay -= 1000;
-              node.status(buildStatus(displayTime(delayRemainingDisplay, reportingformat), TIMER_STATE.RUNNING));
+              node.status(
+                buildStatus(
+                  displayTime(delayRemainingDisplay, reportingformat),
+                  TIMER_STATE.RUNNING,
+                ),
+              );
             }, 1000);
           } else {
-            countdown = setInterval(function() {
+            countdown = setInterval(function () {
               if (delayRemainingDisplay > 60000) {
                 delayRemainingDisplay -= 60000;
-                node.status(buildStatus(displayTime(delayRemainingDisplay, reportingformat), TIMER_STATE.RUNNING));
+                node.status(
+                  buildStatus(
+                    displayTime(delayRemainingDisplay, reportingformat),
+                    TIMER_STATE.RUNNING,
+                  ),
+                );
               }
               if (delayRemainingDisplay <= 60000) {
                 clearInterval(countdown);
                 countdown = null;
-                countdown = setInterval(function() {
+                countdown = setInterval(function () {
                   delayRemainingDisplay -= 1000;
-                  node.status(buildStatus(displayTime(delayRemainingDisplay, reportingformat), TIMER_STATE.RUNNING));
+                  node.status(
+                    buildStatus(
+                      displayTime(delayRemainingDisplay, reportingformat),
+                      TIMER_STATE.RUNNING,
+                    ),
+                  );
                 }, 1000);
               }
             }, 60000);
           }
           miniTimeout = null;
         }, delayRemainingDisplay % 60000);
-
       } else {
-        countdown = setInterval(function() {
+        countdown = setInterval(function () {
           delayRemainingDisplay -= 1000;
-          node.status(buildStatus(displayTime(delayRemainingDisplay, reportingformat), TIMER_STATE.RUNNING));
+          node.status(
+            buildStatus(
+              displayTime(delayRemainingDisplay, reportingformat),
+              TIMER_STATE.RUNNING,
+            ),
+          );
         }, 1000);
       }
     }
@@ -736,8 +912,8 @@ module.exports = function(RED) {
       clearTimeout(cooldownTimeout);
       clearInterval(cooldownReportInterval);
       clearTimeout(cooldownReportMiniTimeout);
-      cooldownTimeout           = null;
-      cooldownReportInterval    = null;
+      cooldownTimeout = null;
+      cooldownReportInterval = null;
       cooldownReportMiniTimeout = null;
     }
 
@@ -748,16 +924,29 @@ module.exports = function(RED) {
      * state) rather than being stopped and restarted.
      */
     function startCooldown(baseMsg) {
-      let cooldownMS = convertToMilliseconds(node.cooldownduration, node.cooldownunits);
+      const cooldownMS = convertToMilliseconds(
+        node.cooldownduration,
+        node.cooldownunits,
+      );
       if (cooldownMS <= 0) return; // cooldown disabled - caller handles true idle expiry
 
-      cooldownActive           = true;
+      cooldownActive = true;
       cooldownRemainingDisplay = cooldownMS;
-      cooldownExpiryTarget     = Date.now() + cooldownMS;
-      timerState               = TIMER_STATE.COOLDOWN;
+      cooldownExpiryTarget = Date.now() + cooldownMS;
+      timerState = TIMER_STATE.COOLDOWN;
       writeState(baseMsg);
-      node.status(buildStatus(displayTime(cooldownRemainingDisplay, reportingformat), TIMER_STATE.COOLDOWN));
-      dispatchEvent(TIMER_EVENT.COOLDOWNSTARTED, baseMsg, false, EVENT_SOURCE.INTERNAL);
+      node.status(
+        buildStatus(
+          displayTime(cooldownRemainingDisplay, reportingformat),
+          TIMER_STATE.COOLDOWN,
+        ),
+      );
+      dispatchEvent(
+        TIMER_EVENT.COOLDOWNSTARTED,
+        baseMsg,
+        false,
+        EVENT_SOURCE.INTERNAL,
+      );
       startCooldownTimeout();
       startCooldownReporting();
     }
@@ -765,10 +954,11 @@ module.exports = function(RED) {
     function startCooldownTimeout() {
       actualCooldownDelayRemaining = cooldownRemainingDisplay;
       if (actualCooldownDelayRemaining > maxTimeout) {
-        actualCooldownDelayInUse     = maxTimeout;
-        actualCooldownDelayRemaining = actualCooldownDelayRemaining - maxTimeout;
+        actualCooldownDelayInUse = maxTimeout;
+        actualCooldownDelayRemaining =
+          actualCooldownDelayRemaining - maxTimeout;
       } else {
-        actualCooldownDelayInUse     = actualCooldownDelayRemaining;
+        actualCooldownDelayInUse = actualCooldownDelayRemaining;
         actualCooldownDelayRemaining = 0;
       }
       cooldownTimeout = setTimeout(cooldownElapsed, actualCooldownDelayInUse);
@@ -782,47 +972,84 @@ module.exports = function(RED) {
      */
     function startCooldownReporting() {
       if (reporting === REPORTING.NONE) {
-        node.status(buildStatus(displayTime(cooldownRemainingDisplay, reportingformat), TIMER_STATE.COOLDOWN));
+        node.status(
+          buildStatus(
+            displayTime(cooldownRemainingDisplay, reportingformat),
+            TIMER_STATE.COOLDOWN,
+          ),
+        );
         return;
       }
 
-      node.status(buildStatus(displayTime(cooldownRemainingDisplay, reportingformat), TIMER_STATE.COOLDOWN));
+      node.status(
+        buildStatus(
+          displayTime(cooldownRemainingDisplay, reportingformat),
+          TIMER_STATE.COOLDOWN,
+        ),
+      );
 
-      if ((cooldownRemainingDisplay > 60000) && (reporting === REPORTING.LAST_MINUTE_SECONDS)) {
-        cooldownReportMiniTimeout = setTimeout(function() {
-          if ((cooldownRemainingDisplay % 60000) !== 0) {
-            cooldownRemainingDisplay -= (cooldownRemainingDisplay % 60000);
-            node.status(buildStatus(displayTime(cooldownRemainingDisplay, reportingformat), TIMER_STATE.COOLDOWN));
+      if (
+        cooldownRemainingDisplay > 60000 &&
+        reporting === REPORTING.LAST_MINUTE_SECONDS
+      ) {
+        cooldownReportMiniTimeout = setTimeout(function () {
+          if (cooldownRemainingDisplay % 60000 !== 0) {
+            cooldownRemainingDisplay -= cooldownRemainingDisplay % 60000;
+            node.status(
+              buildStatus(
+                displayTime(cooldownRemainingDisplay, reportingformat),
+                TIMER_STATE.COOLDOWN,
+              ),
+            );
           }
 
           if (cooldownRemainingDisplay <= 60000) {
-            cooldownReportInterval = setInterval(function() {
+            cooldownReportInterval = setInterval(function () {
               cooldownRemainingDisplay -= 1000;
-              node.status(buildStatus(displayTime(cooldownRemainingDisplay, reportingformat), TIMER_STATE.COOLDOWN));
+              node.status(
+                buildStatus(
+                  displayTime(cooldownRemainingDisplay, reportingformat),
+                  TIMER_STATE.COOLDOWN,
+                ),
+              );
             }, 1000);
           } else {
-            cooldownReportInterval = setInterval(function() {
+            cooldownReportInterval = setInterval(function () {
               if (cooldownRemainingDisplay > 60000) {
                 cooldownRemainingDisplay -= 60000;
-                node.status(buildStatus(displayTime(cooldownRemainingDisplay, reportingformat), TIMER_STATE.COOLDOWN));
+                node.status(
+                  buildStatus(
+                    displayTime(cooldownRemainingDisplay, reportingformat),
+                    TIMER_STATE.COOLDOWN,
+                  ),
+                );
               }
               if (cooldownRemainingDisplay <= 60000) {
                 clearInterval(cooldownReportInterval);
                 cooldownReportInterval = null;
-                cooldownReportInterval = setInterval(function() {
+                cooldownReportInterval = setInterval(function () {
                   cooldownRemainingDisplay -= 1000;
-                  node.status(buildStatus(displayTime(cooldownRemainingDisplay, reportingformat), TIMER_STATE.COOLDOWN));
+                  node.status(
+                    buildStatus(
+                      displayTime(cooldownRemainingDisplay, reportingformat),
+                      TIMER_STATE.COOLDOWN,
+                    ),
+                  );
                 }, 1000);
               }
             }, 60000);
           }
           cooldownReportMiniTimeout = null;
         }, cooldownRemainingDisplay % 60000);
-
       } else {
-        cooldownReportInterval = setInterval(function() {
+        cooldownReportInterval = setInterval(function () {
           cooldownRemainingDisplay -= 1000;
-          node.status(buildStatus(displayTime(cooldownRemainingDisplay, reportingformat), TIMER_STATE.COOLDOWN));
+          node.status(
+            buildStatus(
+              displayTime(cooldownRemainingDisplay, reportingformat),
+              TIMER_STATE.COOLDOWN,
+            ),
+          );
         }, 1000);
       }
     }
@@ -836,20 +1063,25 @@ module.exports = function(RED) {
     function cooldownElapsed() {
       if (actualCooldownDelayRemaining === 0) {
         clearCooldownTimers();
-        cooldownActive           = false;
+        cooldownActive = false;
         cooldownRemainingDisplay = 0;
-        cooldownExpiryTarget     = null;
-        timerState               = TIMER_STATE.EXPIRED;
+        cooldownExpiryTarget = null;
+        timerState = TIMER_STATE.EXPIRED;
         stopHeartbeat();
         deleteState();
         node.status(buildStatus(null, TIMER_STATE.EXPIRED));
-        dispatchEvent(TIMER_EVENT.COOLDOWNENDED, originalMsg, false, EVENT_SOURCE.INTERNAL);
+        dispatchEvent(
+          TIMER_EVENT.COOLDOWNENDED,
+          originalMsg,
+          false,
+          EVENT_SOURCE.INTERNAL,
+        );
         return;
       } else if (actualCooldownDelayRemaining > maxTimeout) {
-        actualCooldownDelayInUse      = maxTimeout;
+        actualCooldownDelayInUse = maxTimeout;
         actualCooldownDelayRemaining -= maxTimeout;
       } else {
-        actualCooldownDelayInUse     = actualCooldownDelayRemaining;
+        actualCooldownDelayInUse = actualCooldownDelayRemaining;
         actualCooldownDelayRemaining = 0;
       }
       cooldownTimeout = setTimeout(cooldownElapsed, actualCooldownDelayInUse);
@@ -878,45 +1110,65 @@ module.exports = function(RED) {
       // counted and individually observable on output 4; they just never
       // trip an action.
       if (!timerRunning && !paused) return;
-      if (node.thresholdaction === THRESHOLD_ACTION.DONOTHING || node.thresholdcount <= 0) return;
+      if (
+        node.thresholdaction === THRESHOLD_ACTION.DONOTHING ||
+        node.thresholdcount <= 0
+      )
+        return;
       if (ignoredCount % node.thresholdcount !== 0) return;
 
       switch (node.thresholdaction) {
-
-        case THRESHOLD_ACTION.STOP:
-          let stopFinalElapsed = getElapsedTime(); // snapshot before the state flips to idle
-          timerRunning    = false;
-          timerState      = TIMER_STATE.STOPPED;
-          stopped         = true;
-          expiryTarget    = null;
+        case THRESHOLD_ACTION.STOP: {
+          const stopFinalElapsed = getElapsedTime(); // snapshot before the state flips to idle
+          timerRunning = false;
+          timerState = TIMER_STATE.STOPPED;
+          stopped = true;
+          expiryTarget = null;
           frozenRemaining = null;
-          frozenElapsed   = null;
+          frozenElapsed = null;
           clearAllTimers();
           stopHeartbeat();
           deleteState();
-          ignoredCount    = 0;
+          ignoredCount = 0;
           lastIgnoredTime = null;
           node.status(buildStatus(null, TIMER_STATE.STOPPED));
-          dispatchEvent(TIMER_EVENT.STOPPED, originalMsg, false, EVENT_SOURCE.INTERNAL, { elapsedTime: stopFinalElapsed });
+          dispatchEvent(
+            TIMER_EVENT.STOPPED,
+            originalMsg,
+            false,
+            EVENT_SOURCE.INTERNAL,
+            { elapsedTime: stopFinalElapsed },
+          );
           break;
+        }
 
         case THRESHOLD_ACTION.PAUSE:
           if (timerRunning) {
             // Same ordering rule as the pause command: capture the exact
             // remaining and elapsed time while still in the running state.
-            frozenRemaining       = getRemainingTime();
-            frozenElapsed         = getElapsedTime();
+            frozenRemaining = getRemainingTime();
+            frozenElapsed = getElapsedTime();
             delayRemainingDisplay = frozenRemaining;
-            timerRunning    = false;
-            timerState      = TIMER_STATE.PAUSED;
-            paused          = true;
-            expiryTarget    = null;
+            timerRunning = false;
+            timerState = TIMER_STATE.PAUSED;
+            paused = true;
+            expiryTarget = null;
             clearAllTimers();
             writeState(originalMsg);
-            ignoredCount    = 0;
+            ignoredCount = 0;
             lastIgnoredTime = null;
-            node.status(buildStatus(displayTime(delayRemainingDisplay, reportingformat), TIMER_STATE.PAUSED));
-            dispatchEvent(TIMER_EVENT.PAUSED, originalMsg, false, EVENT_SOURCE.INTERNAL);
+            node.status(
+              buildStatus(
+                displayTime(delayRemainingDisplay, reportingformat),
+                TIMER_STATE.PAUSED,
+              ),
+            );
+            dispatchEvent(
+              TIMER_EVENT.PAUSED,
+              originalMsg,
+              false,
+              EVENT_SOURCE.INTERNAL,
+            );
           }
           break;
 
@@ -925,31 +1177,49 @@ module.exports = function(RED) {
           delayRemainingDisplay = timerDuration;
           if (paused) {
             frozenRemaining = timerDuration;
-            frozenElapsed   = 0; // full reset: nothing of the fresh run has elapsed yet
+            frozenElapsed = 0; // full reset: nothing of the fresh run has elapsed yet
           } else {
             expiryTarget = Date.now() + timerDuration;
           }
-          timerStartTime        = new Date();
-          ignoredCount          = 0;
-          lastIgnoredTime       = null;
+          timerStartTime = new Date();
+          ignoredCount = 0;
+          lastIgnoredTime = null;
           writeState(originalMsg);
           if (paused) {
-            node.status(buildStatus(displayTime(delayRemainingDisplay, reportingformat), TIMER_STATE.PAUSED));
-            dispatchEvent(TIMER_EVENT.RESTARTED, originalMsg, false, EVENT_SOURCE.INTERNAL);
+            node.status(
+              buildStatus(
+                displayTime(delayRemainingDisplay, reportingformat),
+                TIMER_STATE.PAUSED,
+              ),
+            );
+            dispatchEvent(
+              TIMER_EVENT.RESTARTED,
+              originalMsg,
+              false,
+              EVENT_SOURCE.INTERNAL,
+            );
           } else {
-            timerState   = TIMER_STATE.RUNNING;
+            timerState = TIMER_STATE.RUNNING;
             timerRunning = true;
-            dispatchEvent(TIMER_EVENT.RESTARTED, originalMsg, false, EVENT_SOURCE.INTERNAL);
+            dispatchEvent(
+              TIMER_EVENT.RESTARTED,
+              originalMsg,
+              false,
+              EVENT_SOURCE.INTERNAL,
+            );
             startTimeout(originalMsg);
             startReporting();
           }
           break;
 
-        case THRESHOLD_ACTION.ADDTIME:
-          let addTimeMS = convertToMilliseconds(node.thresholdaddtime, node.thresholdaddtimeunits);
+        case THRESHOLD_ACTION.ADDTIME: {
+          const addTimeMS = convertToMilliseconds(
+            node.thresholdaddtime,
+            node.thresholdaddtimeunits,
+          );
           // Read the true remaining time BEFORE any mutation - the display
           // counter may not have decremented at all with reporting off.
-          let addTimeNewRemaining = getRemainingTime() + addTimeMS;
+          const addTimeNewRemaining = getRemainingTime() + addTimeMS;
           clearAllTimers();
           delayRemainingDisplay = addTimeNewRemaining;
           if (paused) {
@@ -957,22 +1227,39 @@ module.exports = function(RED) {
           } else {
             expiryTarget = Date.now() + addTimeNewRemaining;
           }
-          ignoredCount          = 0;
-          lastIgnoredTime       = null;
+          ignoredCount = 0;
+          lastIgnoredTime = null;
           writeState(originalMsg);
-          dispatchEvent(TIMER_EVENT.TIMEADJUSTED, originalMsg, false, EVENT_SOURCE.INTERNAL, { timeAdjusted: addTimeMS });
+          dispatchEvent(
+            TIMER_EVENT.TIMEADJUSTED,
+            originalMsg,
+            false,
+            EVENT_SOURCE.INTERNAL,
+            { timeAdjusted: addTimeMS },
+          );
           if (paused) {
-            node.status(buildStatus(displayTime(delayRemainingDisplay, reportingformat), TIMER_STATE.PAUSED));
+            node.status(
+              buildStatus(
+                displayTime(delayRemainingDisplay, reportingformat),
+                TIMER_STATE.PAUSED,
+              ),
+            );
           } else {
-            timerState   = TIMER_STATE.RUNNING;
+            timerState = TIMER_STATE.RUNNING;
             timerRunning = true;
             startTimeout(originalMsg);
             startReporting();
           }
           break;
+        }
 
         case THRESHOLD_ACTION.WARNING:
-          dispatchEvent(TIMER_EVENT.WARNING, originalMsg, false, EVENT_SOURCE.INTERNAL);
+          dispatchEvent(
+            TIMER_EVENT.WARNING,
+            originalMsg,
+            false,
+            EVENT_SOURCE.INTERNAL,
+          );
           break;
       }
     }
@@ -990,11 +1277,16 @@ module.exports = function(RED) {
       // own status; a new handler that forgets will leave the PREVIOUS
       // label lingering rather than a blank, so set it explicitly.
 
-      const msgPayload = typeof msg.payload === 'string' ? msg.payload.toLowerCase() : msg.payload;
-      const msgUnits   = normalizeUnits(msg.units);
-      const msgSource  = isRestore ? EVENT_SOURCE.INTERNAL : EVENT_SOURCE.EXTERNAL;
+      const msgPayload =
+        typeof msg.payload === "string"
+          ? msg.payload.toLowerCase()
+          : msg.payload;
+      const msgUnits = normalizeUnits(msg.units);
+      const msgSource = isRestore
+        ? EVENT_SOURCE.INTERNAL
+        : EVENT_SOURCE.EXTERNAL;
 
-      reporting       = node.reporting;
+      reporting = node.reporting;
       reportingformat = node.reportingformat;
 
       // -- Query -----------------------------------------------------------
@@ -1012,11 +1304,20 @@ module.exports = function(RED) {
       // no arming of the _timerpass filter. Stop remains fully genuine
       // whenever something is alive: running, paused, or cooldown ("still
       // the timer running, in a sense").
-      if (msgPayload === PAYLOAD.STOP && !timerRunning && !paused && !cooldownActive) {
+      if (
+        msgPayload === PAYLOAD.STOP &&
+        !timerRunning &&
+        !paused &&
+        !cooldownActive
+      ) {
         // The _timerpass swallow is unrelated to this rule and is preserved
         // exactly: an armed node still silently absorbs _timerpass-tagged
         // messages, stop included.
-        if (stopped === true && msg._timerpass === true && node.ignoretimerpass !== true) {
+        if (
+          stopped === true &&
+          msg._timerpass === true &&
+          node.ignoretimerpass !== true
+        ) {
           node.status({ fill: "red", shape: "ring", text: "stopped" });
           return;
         }
@@ -1030,7 +1331,9 @@ module.exports = function(RED) {
         if (disabled) {
           // Redundant command: no state change and (harmonized with every
           // other redundant command) no ignored-count bookkeeping.
-          node.status(buildStatus(displayRemaining(reportingformat), timerState));
+          node.status(
+            buildStatus(displayRemaining(reportingformat), timerState),
+          );
           dispatchEvent(TIMER_EVENT.DISABLED, msg, true, msgSource);
           return;
         }
@@ -1044,7 +1347,9 @@ module.exports = function(RED) {
       // -- Enable ----------------------------------------------------------
       if (msgPayload === PAYLOAD.ENABLE) {
         if (!disabled) {
-          node.status(buildStatus(displayRemaining(reportingformat), timerState));
+          node.status(
+            buildStatus(displayRemaining(reportingformat), timerState),
+          );
           dispatchEvent(TIMER_EVENT.ENABLED, msg, true, msgSource);
           return;
         }
@@ -1058,13 +1363,15 @@ module.exports = function(RED) {
       // -- Lock ------------------------------------------------------------
       if (msgPayload === PAYLOAD.LOCK) {
         if (node.donotresettimer) {
-          node.status(buildStatus(displayRemaining(reportingformat), timerState));
+          node.status(
+            buildStatus(displayRemaining(reportingformat), timerState),
+          );
           dispatchEvent(TIMER_EVENT.LOCKED, msg, true, msgSource);
           return;
         }
         node.donotresettimer = true;
-        ignoredCount         = 0;
-        lastIgnoredTime      = null;
+        ignoredCount = 0;
+        lastIgnoredTime = null;
         writeState(originalMsg);
         node.status(buildStatus(displayRemaining(reportingformat), timerState));
         dispatchEvent(TIMER_EVENT.LOCKED, msg, false, msgSource);
@@ -1074,13 +1381,15 @@ module.exports = function(RED) {
       // -- Unlock ----------------------------------------------------------
       if (msgPayload === PAYLOAD.UNLOCK) {
         if (!node.donotresettimer) {
-          node.status(buildStatus(displayRemaining(reportingformat), timerState));
+          node.status(
+            buildStatus(displayRemaining(reportingformat), timerState),
+          );
           dispatchEvent(TIMER_EVENT.UNLOCKED, msg, true, msgSource);
           return;
         }
         node.donotresettimer = false;
-        ignoredCount         = 0;
-        lastIgnoredTime      = null;
+        ignoredCount = 0;
+        lastIgnoredTime = null;
         writeState(originalMsg);
         node.status(buildStatus(displayRemaining(reportingformat), timerState));
         dispatchEvent(TIMER_EVENT.UNLOCKED, msg, false, msgSource);
@@ -1089,20 +1398,24 @@ module.exports = function(RED) {
 
       // -- Adjust Time -----------------------------------------------------
       if (msgPayload === PAYLOAD.ADJUSTTIME) {
-        let adjustUnits = normalizeUnits(msg.adjusttimeunits);
-        let adjustRaw   = toFiniteNumber(msg.adjusttime);
+        const adjustUnits = normalizeUnits(msg.adjusttimeunits);
+        const adjustRaw = toFiniteNumber(msg.adjusttime);
         // A missing or non-numeric msg.adjusttime is rejected outright -
         // Math.max(0, NaN) is NaN, which used to silently corrupt the
         // remaining time. The attempted raw value rides along so a
         // downstream consumer can see what was rejected.
         if (!Number.isFinite(adjustRaw)) {
-          node.status(buildStatus(displayRemaining(reportingformat), timerState));
-          dispatchEvent(TIMER_EVENT.TIMEADJUSTED, msg, true, msgSource, { timeAdjusted: msg.adjusttime !== undefined ? msg.adjusttime : null });
+          node.status(
+            buildStatus(displayRemaining(reportingformat), timerState),
+          );
+          dispatchEvent(TIMER_EVENT.TIMEADJUSTED, msg, true, msgSource, {
+            timeAdjusted: msg.adjusttime !== undefined ? msg.adjusttime : null,
+          });
           return;
         }
-        let adjustMS = msgValueToMs(adjustRaw, adjustUnits);
+        const adjustMS = msgValueToMs(adjustRaw, adjustUnits);
         if (timerRunning || paused) {
-          let newRemaining = Math.max(0, getRemainingTime() + adjustMS);
+          const newRemaining = Math.max(0, getRemainingTime() + adjustMS);
           delayRemainingDisplay = newRemaining;
           if (paused) {
             frozenRemaining = newRemaining;
@@ -1111,37 +1424,56 @@ module.exports = function(RED) {
           }
           writeState(originalMsg);
           if (paused) {
-            node.status(buildStatus(displayRemaining(reportingformat), TIMER_STATE.PAUSED));
+            node.status(
+              buildStatus(
+                displayRemaining(reportingformat),
+                TIMER_STATE.PAUSED,
+              ),
+            );
           } else {
             clearAllTimers();
             startTimeout(originalMsg);
             startReporting();
           }
-          dispatchEvent(TIMER_EVENT.TIMEADJUSTED, msg, false, msgSource, { timeAdjusted: adjustMS });
+          dispatchEvent(TIMER_EVENT.TIMEADJUSTED, msg, false, msgSource, {
+            timeAdjusted: adjustMS,
+          });
         } else {
-          node.status(buildStatus(displayRemaining(reportingformat), timerState));
-          dispatchEvent(TIMER_EVENT.TIMEADJUSTED, msg, true, msgSource, { timeAdjusted: adjustMS });
+          node.status(
+            buildStatus(displayRemaining(reportingformat), timerState),
+          );
+          dispatchEvent(TIMER_EVENT.TIMEADJUSTED, msg, true, msgSource, {
+            timeAdjusted: adjustMS,
+          });
         }
         return;
       }
 
       // -- Set Time --------------------------------------------------------
       if (msgPayload === PAYLOAD.SETTIME) {
-        let setUnits = normalizeUnits(msg.settimeunits);
-        let setRaw   = toFiniteNumber(msg.settime);
+        const setUnits = normalizeUnits(msg.settimeunits);
+        const setRaw = toFiniteNumber(msg.settime);
         // NaN <= 0 is false, so NaN used to pass the positive-value check
         // below as "valid" and corrupt the remaining time. Reject non-finite
         // values first, carrying the attempted raw value.
         if (!Number.isFinite(setRaw)) {
-          node.status(buildStatus(displayRemaining(reportingformat), timerState));
-          dispatchEvent(TIMER_EVENT.TIMESET, msg, true, msgSource, { timeSet: msg.settime !== undefined ? msg.settime : null });
+          node.status(
+            buildStatus(displayRemaining(reportingformat), timerState),
+          );
+          dispatchEvent(TIMER_EVENT.TIMESET, msg, true, msgSource, {
+            timeSet: msg.settime !== undefined ? msg.settime : null,
+          });
           return;
         }
-        let setMS = msgValueToMs(setRaw, setUnits);
+        const setMS = msgValueToMs(setRaw, setUnits);
         if (timerRunning || paused) {
           if (setMS <= 0) {
-            node.status(buildStatus(displayRemaining(reportingformat), timerState));
-            dispatchEvent(TIMER_EVENT.TIMESET, msg, true, msgSource, { timeSet: setMS });
+            node.status(
+              buildStatus(displayRemaining(reportingformat), timerState),
+            );
+            dispatchEvent(TIMER_EVENT.TIMESET, msg, true, msgSource, {
+              timeSet: setMS,
+            });
             return;
           }
           delayRemainingDisplay = setMS;
@@ -1152,48 +1484,71 @@ module.exports = function(RED) {
           }
           writeState(originalMsg);
           if (paused) {
-            node.status(buildStatus(displayRemaining(reportingformat), TIMER_STATE.PAUSED));
+            node.status(
+              buildStatus(
+                displayRemaining(reportingformat),
+                TIMER_STATE.PAUSED,
+              ),
+            );
           } else {
             clearAllTimers();
             startTimeout(originalMsg);
             startReporting();
           }
-          dispatchEvent(TIMER_EVENT.TIMESET, msg, false, msgSource, { timeSet: setMS });
+          dispatchEvent(TIMER_EVENT.TIMESET, msg, false, msgSource, {
+            timeSet: setMS,
+          });
         } else {
-          node.status(buildStatus(displayRemaining(reportingformat), timerState));
-          dispatchEvent(TIMER_EVENT.TIMESET, msg, true, msgSource, { timeSet: setMS });
+          node.status(
+            buildStatus(displayRemaining(reportingformat), timerState),
+          );
+          dispatchEvent(TIMER_EVENT.TIMESET, msg, true, msgSource, {
+            timeSet: setMS,
+          });
         }
         return;
       }
 
       // -- Set Duration ----------------------------------------------------
       if (msgPayload === PAYLOAD.SETDURATION) {
-        let durUnits = normalizeUnits(msg.setdurationunits);
-        let durRaw   = toFiniteNumber(msg.setduration);
+        const durUnits = normalizeUnits(msg.setdurationunits);
+        const durRaw = toFiniteNumber(msg.setduration);
         // Same NaN <= 0 hole as settime, but worse: a NaN stored in
         // overrideDuration would poison the NEXT run, not just this one.
         if (!Number.isFinite(durRaw)) {
-          node.status(buildStatus(displayRemaining(reportingformat), timerState));
-          dispatchEvent(TIMER_EVENT.DURATIONSET, msg, true, msgSource, { durationSet: msg.setduration !== undefined ? msg.setduration : null });
+          node.status(
+            buildStatus(displayRemaining(reportingformat), timerState),
+          );
+          dispatchEvent(TIMER_EVENT.DURATIONSET, msg, true, msgSource, {
+            durationSet: msg.setduration !== undefined ? msg.setduration : null,
+          });
           return;
         }
-        let durMS = msgValueToMs(durRaw, durUnits);
+        const durMS = msgValueToMs(durRaw, durUnits);
         if (durMS <= 0) {
-          node.status(buildStatus(displayRemaining(reportingformat), timerState));
-          dispatchEvent(TIMER_EVENT.DURATIONSET, msg, true, msgSource, { durationSet: durMS });
+          node.status(
+            buildStatus(displayRemaining(reportingformat), timerState),
+          );
+          dispatchEvent(TIMER_EVENT.DURATIONSET, msg, true, msgSource, {
+            durationSet: durMS,
+          });
           return;
         }
         overrideDuration = durMS;
         writeState(originalMsg);
         node.status(buildStatus(displayRemaining(reportingformat), timerState));
-        dispatchEvent(TIMER_EVENT.DURATIONSET, msg, false, msgSource, { durationSet: durMS });
+        dispatchEvent(TIMER_EVENT.DURATIONSET, msg, false, msgSource, {
+          durationSet: durMS,
+        });
         return;
       }
 
       // -- Pause -----------------------------------------------------------
       if (msgPayload === PAYLOAD.PAUSE) {
         if (paused) {
-          node.status(buildStatus(displayRemaining(reportingformat), TIMER_STATE.PAUSED));
+          node.status(
+            buildStatus(displayRemaining(reportingformat), TIMER_STATE.PAUSED),
+          );
           dispatchEvent(TIMER_EVENT.PAUSED, msg, true, msgSource);
           return;
         }
@@ -1202,18 +1557,22 @@ module.exports = function(RED) {
           // state - both getters read live wall-clock values only while
           // running.
           frozenRemaining = getRemainingTime();
-          frozenElapsed   = getElapsedTime();
-          delayRemainingDisplay = frozenRemaining;  // keep the display counter in step for the paused label
+          frozenElapsed = getElapsedTime();
+          delayRemainingDisplay = frozenRemaining; // keep the display counter in step for the paused label
           clearAllTimers();
-          paused       = true;
+          paused = true;
           timerRunning = false;
-          timerState   = TIMER_STATE.PAUSED;
+          timerState = TIMER_STATE.PAUSED;
           expiryTarget = null;
           writeState(originalMsg);
-          node.status(buildStatus(displayRemaining(reportingformat), TIMER_STATE.PAUSED));
+          node.status(
+            buildStatus(displayRemaining(reportingformat), TIMER_STATE.PAUSED),
+          );
           dispatchEvent(TIMER_EVENT.PAUSED, msg, false, msgSource);
         } else {
-          node.status(buildStatus(displayRemaining(reportingformat), timerState));
+          node.status(
+            buildStatus(displayRemaining(reportingformat), timerState),
+          );
           dispatchEvent(TIMER_EVENT.PAUSED, msg, true, msgSource);
         }
         return;
@@ -1224,20 +1583,24 @@ module.exports = function(RED) {
         if (paused) {
           // Resume from the exact frozen snapshot, not the display counter
           // (which is stale when Status Reporting is "none").
-          delayRemainingDisplay = getRemainingTime();  // startTimeout() and the label both read this
-          paused          = false;
-          timerRunning    = true;
-          timerState      = TIMER_STATE.RUNNING;
-          expiryTarget    = Date.now() + delayRemainingDisplay;
+          delayRemainingDisplay = getRemainingTime(); // startTimeout() and the label both read this
+          paused = false;
+          timerRunning = true;
+          timerState = TIMER_STATE.RUNNING;
+          expiryTarget = Date.now() + delayRemainingDisplay;
           frozenRemaining = null;
-          frozenElapsed   = null;
-          timerStartTime  = new Date((new Date()).getTime() - (timerDuration - delayRemainingDisplay));
+          frozenElapsed = null;
+          timerStartTime = new Date(
+            new Date().getTime() - (timerDuration - delayRemainingDisplay),
+          );
           writeState(originalMsg);
           dispatchEvent(TIMER_EVENT.RESUMED, msg, false, msgSource);
           startTimeout(originalMsg);
           startReporting();
         } else {
-          node.status(buildStatus(displayRemaining(reportingformat), timerState));
+          node.status(
+            buildStatus(displayRemaining(reportingformat), timerState),
+          );
           dispatchEvent(TIMER_EVENT.RESUMED, msg, true, msgSource);
         }
         return;
@@ -1251,22 +1614,34 @@ module.exports = function(RED) {
       if (paused && msgPayload !== PAYLOAD.STOP) {
         ignoredCount++;
         lastIgnoredTime = new Date();
-        node.status(buildStatus(displayRemaining(reportingformat), TIMER_STATE.PAUSED));
+        node.status(
+          buildStatus(displayRemaining(reportingformat), TIMER_STATE.PAUSED),
+        );
         dispatchEvent(TIMER_EVENT.RESTARTED, msg, true, msgSource);
         handleThresholdAction();
         return;
       }
 
       // -- _timerpass gate -------------------------------------------------
-      if (stopped === false || msg._timerpass !== true || node.ignoretimerpass === true) {
-
+      if (
+        stopped === false ||
+        msg._timerpass !== true ||
+        node.ignoretimerpass === true
+      ) {
         // -- donotresettimer gate --------------------------------------------
         // Same reasoning as the paused gate above: the timer is already
         // running, so a blocked message here is a blocked RESTART.
-        if (node.donotresettimer && timerRunning && msgPayload !== PAYLOAD.STOP && msg._timerpass !== true) {
+        if (
+          node.donotresettimer &&
+          timerRunning &&
+          msgPayload !== PAYLOAD.STOP &&
+          msg._timerpass !== true
+        ) {
           ignoredCount++;
           lastIgnoredTime = new Date();
-          node.status(buildStatus(displayRemaining(reportingformat), TIMER_STATE.RUNNING));
+          node.status(
+            buildStatus(displayRemaining(reportingformat), TIMER_STATE.RUNNING),
+          );
           dispatchEvent(TIMER_EVENT.RESTARTED, msg, true, msgSource);
           handleThresholdAction();
           return;
@@ -1276,8 +1651,8 @@ module.exports = function(RED) {
         // Snapshot elapsed BEFORE the shared paused-flag clear below - a
         // stop arriving while paused must report the frozen elapsed value,
         // and getElapsedTime() can no longer see it once paused is false.
-        let preStopElapsed = getElapsedTime();
-        paused  = false;
+        const preStopElapsed = getElapsedTime();
+        paused = false;
         clearAllTimers();
 
         // -- Stop ----------------------------------------------------------
@@ -1288,24 +1663,26 @@ module.exports = function(RED) {
           // into the cooldown period if cancelling a cooldown. The stopped
           // event carries it - information available nowhere else once the
           // run dies.
-          let finalElapsed = preStopElapsed;
+          const finalElapsed = preStopElapsed;
           // An explicit stop always cancels an in-progress cooldown too -
           // it's the one way to cut a cooldown short.
           clearCooldownTimers();
-          cooldownActive       = false;
+          cooldownActive = false;
           cooldownExpiryTarget = null;
-          timerRunning         = false;
-          timerState           = TIMER_STATE.STOPPED;
-          stopped              = true;
-          expiryTarget         = null;
-          frozenRemaining      = null;
-          frozenElapsed        = null;
+          timerRunning = false;
+          timerState = TIMER_STATE.STOPPED;
+          stopped = true;
+          expiryTarget = null;
+          frozenRemaining = null;
+          frozenElapsed = null;
           stopHeartbeat();
           deleteState();
-          ignoredCount    = 0;
+          ignoredCount = 0;
           lastIgnoredTime = null;
           node.status(buildStatus(null, TIMER_STATE.STOPPED));
-          dispatchEvent(TIMER_EVENT.STOPPED, msg, false, msgSource, { elapsedTime: finalElapsed });
+          dispatchEvent(TIMER_EVENT.STOPPED, msg, false, msgSource, {
+            elapsedTime: finalElapsed,
+          });
           return;
         }
 
@@ -1320,24 +1697,36 @@ module.exports = function(RED) {
         if ((disabled || cooldownActive) && !isRestore) {
           ignoredCount++;
           lastIgnoredTime = new Date();
-          node.status(buildStatus(displayRemaining(reportingformat), timerState));
+          node.status(
+            buildStatus(displayRemaining(reportingformat), timerState),
+          );
           dispatchEvent(TIMER_EVENT.STARTED, msg, true, msgSource);
           return;
         }
 
         // -- Start / Restart -----------------------------------------------
-        let wasRunning = timerRunning;
+        const wasRunning = timerRunning;
 
         msg._timerpass = true;
 
         if (msgUnits !== null) {
           switch (msgUnits) {
-            case UNITS_INPUT.MILLISECOND: delayFactor = 1;                break;
-            case UNITS_INPUT.SECOND:      delayFactor = 1000;             break;
-            case UNITS_INPUT.MINUTE:      delayFactor = 1000 * 60;        break;
-            case UNITS_INPUT.HOUR:        delayFactor = 1000 * 60 * 60;   break;
+            case UNITS_INPUT.MILLISECOND:
+              delayFactor = 1;
+              break;
+            case UNITS_INPUT.SECOND:
+              delayFactor = 1000;
+              break;
+            case UNITS_INPUT.MINUTE:
+              delayFactor = 1000 * 60;
+              break;
+            case UNITS_INPUT.HOUR:
+              delayFactor = 1000 * 60 * 60;
+              break;
             default:
-              node.warn("Unknown units in message, using node default: " + node.units);
+              node.warn(
+                "Unknown units in message, using node default: " + node.units,
+              );
               delayFactor = convertToMilliseconds(1, node.units);
           }
         } else {
@@ -1350,12 +1739,13 @@ module.exports = function(RED) {
         // "5s" passed the guard but multiplied to NaN. Validate and compute
         // with the SAME numeric value. Fractional delays (e.g. 2.5 minutes)
         // remain supported.
-        let msgDelay = msg.delay != null ? toFiniteNumber(msg.delay) : NaN;
+        const msgDelay = msg.delay != null ? toFiniteNumber(msg.delay) : NaN;
         if (Number.isFinite(msgDelay)) {
           delayRemainingDisplay = Math.max(0, msgDelay) * delayFactor;
         } else {
-          delayRemainingDisplay = overrideDuration !== null ? overrideDuration : node.duration;
-          overrideDuration      = null;
+          delayRemainingDisplay =
+            overrideDuration !== null ? overrideDuration : node.duration;
+          overrideDuration = null;
         }
 
         // Fresh-run identity resets. Skipped on a persisted restore
@@ -1366,17 +1756,17 @@ module.exports = function(RED) {
         // before this call) survive. Only the output-1 Start event treats
         // it as a start, for downstream consumers' benefit.
         if (!isRestore) {
-          ignoredCount    = 0;
+          ignoredCount = 0;
           lastIgnoredTime = null;
-          timerStartTime  = new Date();
-          timerDuration   = delayRemainingDisplay;
+          timerStartTime = new Date();
+          timerDuration = delayRemainingDisplay;
         }
-        timerRunning    = true;
-        timerState      = TIMER_STATE.RUNNING;
-        expiryTarget    = Date.now() + delayRemainingDisplay;
+        timerRunning = true;
+        timerState = TIMER_STATE.RUNNING;
+        expiryTarget = Date.now() + delayRemainingDisplay;
         frozenRemaining = null;
-        frozenElapsed   = null;
-        originalMsg     = msg;
+        frozenElapsed = null;
+        originalMsg = msg;
 
         writeState(msg);
 
@@ -1389,7 +1779,6 @@ module.exports = function(RED) {
         startTimeout(msg);
         startReporting();
         startHeartbeat();
-
       } else {
         node.status({ fill: "red", shape: "ring", text: "stopped" });
       }
@@ -1406,20 +1795,26 @@ module.exports = function(RED) {
         // returns 0 once the state is idle. With mid-run adjustments this
         // is the true wall-clock run length, which may differ from
         // timerDuration.
-        let finalElapsed = getElapsedTime();
+        const finalElapsed = getElapsedTime();
         clearInterval(countdown);
         timerRunning = false;
-        timerState   = TIMER_STATE.EXPIRED;
+        timerState = TIMER_STATE.EXPIRED;
         expiryTarget = null;
-        delayRemainingDisplay = 0;  // Ensure remainingTime is correctly 0 on expiry
+        delayRemainingDisplay = 0; // Ensure remainingTime is correctly 0 on expiry
         node.status(buildStatus(null, TIMER_STATE.EXPIRED));
 
         if (stopped === false) {
-          ignoredCount    = 0;
+          ignoredCount = 0;
           lastIgnoredTime = null;
           // Expiry is never externally triggered - it is always the node's
           // own clock reaching zero.
-          dispatchEvent(TIMER_EVENT.EXPIRED, msg, false, EVENT_SOURCE.INTERNAL, { elapsedTime: finalElapsed });
+          dispatchEvent(
+            TIMER_EVENT.EXPIRED,
+            msg,
+            false,
+            EVENT_SOURCE.INTERNAL,
+            { elapsedTime: finalElapsed },
+          );
 
           // If a cooldown is configured, transition into it now - heartbeat
           // is left running uninterrupted throughout. Otherwise this is a
@@ -1432,14 +1827,14 @@ module.exports = function(RED) {
           return;
         }
         stopHeartbeat();
-        timeout     = null;
-        countdown   = null;
+        timeout = null;
+        countdown = null;
         miniTimeout = null;
       } else if (actualDelayRemaining > maxTimeout) {
-        actualDelayInUse      = maxTimeout;
+        actualDelayInUse = maxTimeout;
         actualDelayRemaining -= maxTimeout;
       } else {
-        actualDelayInUse     = actualDelayRemaining;
+        actualDelayInUse = actualDelayRemaining;
         actualDelayRemaining = 0;
       }
       timeout = setTimeout(timerElapsed, actualDelayInUse, msg);
@@ -1458,15 +1853,25 @@ module.exports = function(RED) {
       // as 35, not 35.221.
       delayToDisplay = Math.round(delayToDisplay / 1000);
       switch (reportingformat) {
-        case REPORTING_FORMAT.SECONDS: return delayToDisplay;
-        case REPORTING_FORMAT.MINUTES: return delayToDisplay / 60;
-        case REPORTING_FORMAT.HOURS:   return delayToDisplay / 3600;
-        default:
-          let hours   = String(Math.floor(delayToDisplay / 3600)).padStart(2, "0");
+        case REPORTING_FORMAT.SECONDS:
+          return delayToDisplay;
+        case REPORTING_FORMAT.MINUTES:
+          return delayToDisplay / 60;
+        case REPORTING_FORMAT.HOURS:
+          return delayToDisplay / 3600;
+        default: {
+          const hours = String(Math.floor(delayToDisplay / 3600)).padStart(
+            2,
+            "0",
+          );
           delayToDisplay %= 3600;
-          let minutes = String(Math.floor(delayToDisplay / 60)).padStart(2, "0");
-          let seconds = String(delayToDisplay % 60).padStart(2, "0");
+          const minutes = String(Math.floor(delayToDisplay / 60)).padStart(
+            2,
+            "0",
+          );
+          const seconds = String(delayToDisplay % 60).padStart(2, "0");
           return hours + ":" + minutes + ":" + seconds;
+        }
       }
     }
 
@@ -1480,43 +1885,62 @@ module.exports = function(RED) {
         if (!fs.existsSync(path.dirname(stvdtimersFile))) {
           fs.mkdirSync(path.dirname(stvdtimersFile), { recursive: true });
         }
-        let target = (new Date(Date.now() + getRemainingTime())).toISOString();
-        fs.writeFileSync(stvdtimersFile, JSON.stringify(JSON.decycle({
-          reporting:        node.reporting,
-          reportingformat:  node.reportingformat,
-          time:             target,
-          // Frozen snapshots, written only while paused. The `time` target
-          // above is correct for states that live in wall-clock terms
-          // (running, cooldown) but wrong for a frozen pause - computing
-          // target-minus-now on restore would silently deduct Node-RED
-          // downtime from a timer that is supposed to be frozen. The paused
-          // restore reads these directly; old persist files without them
-          // fall back to the legacy target-based calculation.
-          remaining:        paused ? frozenRemaining : null,
-          frozenElapsed:    paused ? frozenElapsed   : null,
-          origmsg:          msg !== null ? msg : {},
-          paused:           paused,
-          timerDuration:    timerDuration,
-          timerStartTime:   timerStartTime ? timerStartTime.toISOString() : null,
-          timerState:       timerState,
-          ignoredCount:     ignoredCount,
-          lastIgnoredTime:  lastIgnoredTime ? lastIgnoredTime.toISOString() : null,
-          donotresettimer:  node.donotresettimer,
-          overrideDuration: overrideDuration,
-          disabled:         disabled,
-          cooldownActive:   cooldownActive
-        })));
+        const target = new Date(Date.now() + getRemainingTime()).toISOString();
+        fs.writeFileSync(
+          stvdtimersFile,
+          JSON.stringify(
+            JSON.decycle({
+              reporting: node.reporting,
+              reportingformat: node.reportingformat,
+              time: target,
+              // Frozen snapshots, written only while paused. The `time` target
+              // above is correct for states that live in wall-clock terms
+              // (running, cooldown) but wrong for a frozen pause - computing
+              // target-minus-now on restore would silently deduct Node-RED
+              // downtime from a timer that is supposed to be frozen. The paused
+              // restore reads these directly; old persist files without them
+              // fall back to the legacy target-based calculation.
+              remaining: paused ? frozenRemaining : null,
+              frozenElapsed: paused ? frozenElapsed : null,
+              origmsg: msg !== null ? msg : {},
+              paused: paused,
+              timerDuration: timerDuration,
+              timerStartTime: timerStartTime
+                ? timerStartTime.toISOString()
+                : null,
+              timerState: timerState,
+              ignoredCount: ignoredCount,
+              lastIgnoredTime: lastIgnoredTime
+                ? lastIgnoredTime.toISOString()
+                : null,
+              donotresettimer: node.donotresettimer,
+              overrideDuration: overrideDuration,
+              disabled: disabled,
+              cooldownActive: cooldownActive,
+            }),
+          ),
+        );
       } catch (error) {
-        node.error("Error writing persistent file for timer-events node " + node.id.toString() + "\n\n" + error.toString());
+        node.error(
+          "Error writing persistent file for timer-events node " +
+            node.id.toString() +
+            "\n\n" +
+            error.toString(),
+        );
       }
     }
 
     function readState() {
       try {
-        let contents = fs.readFileSync(stvdtimersFile).toString();
-        if (typeof contents !== 'undefined') return contents;
+        const contents = fs.readFileSync(stvdtimersFile).toString();
+        if (typeof contents !== "undefined") return contents;
       } catch (error) {
-        node.error("Error reading persistent file for timer-events node " + node.id.toString() + "\n\n" + error.toString());
+        node.error(
+          "Error reading persistent file for timer-events node " +
+            node.id.toString() +
+            "\n\n" +
+            error.toString(),
+        );
       }
       return -1;
     }
@@ -1525,10 +1949,15 @@ module.exports = function(RED) {
       try {
         if (fs.existsSync(stvdtimersFile)) fs.unlinkSync(stvdtimersFile);
       } catch (error) {
-        node.error("Error deleting persistent file for timer-events node " + node.id.toString() + "\n\n" + error.toString());
+        node.error(
+          "Error deleting persistent file for timer-events node " +
+            node.id.toString() +
+            "\n\n" +
+            error.toString(),
+        );
       }
     }
   }
 
   RED.nodes.registerType("timer-events", TimerEvents);
-}
+};

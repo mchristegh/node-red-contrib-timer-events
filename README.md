@@ -17,12 +17,12 @@ that moment.
 
 ## Outputs
 
-| # | Output | Fires on |
-|---|--------|----------|
-| 1 | **Start**  | A true stopped/expired → running transition. Nothing else. |
-| 2 | **Stop**   | A genuine stop command or natural expiry. Nothing else. |
-| 3 | **Query**  | An incoming `query` message, or a Heartbeat tick. |
-| 4 | **Events** | Every event, including copies of Start/Stop and every ignored/blocked command. |
+| #   | Output     | Fires on                                                                       |
+| --- | ---------- | ------------------------------------------------------------------------------ |
+| 1   | **Start**  | A true stopped/expired → running transition. Nothing else.                     |
+| 2   | **Stop**   | A genuine stop command or natural expiry. Nothing else.                        |
+| 3   | **Query**  | An incoming `query` message, or a Heartbeat tick.                              |
+| 4   | **Events** | Every event, including copies of Start/Stop and every ignored/blocked command. |
 
 Outputs 1 and 2 never carry a blocked or redundant message — anything that
 didn't truly happen appears only on output 4, tagged `msg.ignored: true`.
