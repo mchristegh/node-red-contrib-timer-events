@@ -1,5 +1,7 @@
 # timer-events
 
+[![Node.js Package](https://github.com/mchristegh/node-red-contrib-timer-events/actions/workflows/npm-publish.yml/badge.svg)](https://github.com/mchristegh/node-red-contrib-timer-events/actions/workflows/npm-publish.yml)
+
 A countdown timer node for [Node-RED](https://nodered.org/) with a
 purpose-built four-output event model. Every command — successful,
 redundant, or blocked — is observable as a structured event, so flows can
