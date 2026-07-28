@@ -69,3 +69,9 @@ Licensed under the [Apache License 2.0](LICENSE).
 Modifications copyright (C) 2025 mchristegh.
 Derived from stoptimer-varidelay-plus — modifications copyright (C) 2020
 hamsando; original copyright jbardi.
+
+## Support
+
+If you found this project useful, coffee is always appreciated
+
+[<img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="40">](https://www.buymeacoffee.com/mchristegh)
